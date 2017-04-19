@@ -3,8 +3,8 @@
 # Created by: nmoissee@eoas.ubc.ca Nov 2016
 #=======================================================
 #INPUT
-Tmin=-40.
-Tmax=40.
+Tmin=-30.
+Tmax=30.
 Pstep=0.01
 
 
@@ -30,7 +30,7 @@ c1 = Rd/Cp 		#dimensionless
 # c3 = Lv/Cp 		#[K]
 
 
-Prange = np.arange(100,1, -Pstep)
+Prange = np.arange(100,0, -Pstep)
 # Prange = np.arange(100,1, -0.001)
 # ThetaW = np.arange(Tmin,Tmax)
 ThetaW = np.arange(Tmin,Tmax)
@@ -104,65 +104,90 @@ plt.savefig('norm_theta.pdf')
 plt.show()
 
 
-#attempt to fit normalized adiabats with pq
-def pq(VAR,p,q,s):
-        return ((1-(VAR)**(p))**(q))
-p0 = (1,1,1)
-store_args = np.zeros((len(p0),len(ThetaW)-1))
-for nTh in range(len(ThetaW)-1):
-# for i in range(6):
-    popt, covp = curve_fit(pq,Prange/100,norm_adiabats[:,nTh+1],p0 = p0)
-    store_args[:,nTh] = popt[:]
-    plt.plot(pq(Prange/100,popt[0],popt[1],popt[2]),Prange/100,'r')
-    plt.plot(norm_adiabats[:,nTh+1],Prange/100,'b')
-    plt.xlim([0,1])
-    # plt.ylim([0,1])
-    p0 = popt[:]
-    print popt
+#loog at gradient of change
+grad_norm = np.gradient(norm_adiabats)[0]
+plt.contourf(grad_norm, vmin=-0.02, vmax=0)
+cbar = plt.colorbar()
+cbar.set_clim([-0.02,0])
 plt.show()
 
 
-#normailzing by one of the adiabats removes the non-linearity from the data
-plt.title('40C ADIABAT FIT')
-# Pref = norm_adiabats[:,-1]
-Pref = norm_adiabats[:,-1]
-
-pref_fit = np.poly1d(np.polyfit(Prange,Pref,28))
-plt.plot(Prange,Pref,'g')
-plt.plot(Prange,pref_fit(Prange),'r')
-plt.savefig('pref_fit.pdf')
+Pref = []
+for nLine in range(len(ThetaW)):
+    pidx = np.argmax(abs(grad_norm[:,nLine]))
+    # Pref.append(norm_adiabats[pidx,nLine])
+    Pref.append(Prange[pidx])
+plt.plot(Pref)
 plt.show()
-print(sum(abs(Pref-pref_fit(Prange))))
+
+
+
+gamma = np.empty_like(norm_adiabats)
+for nTheta in range(len(ThetaW)):
+    gamma[:,nTheta] = (100-Prange)/(100-Pref[nTheta])
 
 
 plt.title('TRANSFORMED MOIST ADIABATS')
-plt.plot(Pref,norm_adiabats[:,0:Tmax],'b')
-plt.plot(Pref,norm_adiabats[:,Tmax:],'r')
+for nTheta in range(len(ThetaW)):
+    plt.plot(gamma[:,nTheta],norm_adiabats[:,nTheta])
 # plt.plot(norm_adiabats[:,0:50],Pref,'r')
 # plt.plot(norm_adiabats[:,50:],Pref ,'b')
-plt.xlim([0,1])
-plt.xlabel('normalized pressure')
-plt.ylim([0,1])
-plt.ylabel('ref adiabat')
-plt.savefig('trans_adiabats.pdf')
+# plt.xlim([0,1])
+# plt.xlabel('normalized pressure')
+# plt.ylim([0,1])
+# plt.ylabel('ref adiabat')
 plt.show()
 
 
-def pq(VAR,p,q,s):
-        return 1- ((1-VAR)**(p))**(q)
-p0 = (11,0.3,0.9)
-store_args = np.zeros((len(p0),len(ThetaW)-1))
-for nTh in range(len(ThetaW)-1):
-# for i in range(6):
-    popt, covp = curve_fit(pq,Pref,norm_adiabats[:,nTh+1],p0 = p0)
-    store_args[:,nTh] = popt[:]
-    plt.plot(Pref,pq(Pref,popt[0],popt[1],popt[2]),'r')
-    plt.plot(Pref,norm_adiabats[:,nTh+1],'b')
-    plt.xlim([0,1])
-    plt.ylim([0,1])
-    p0 = popt[:]
-    print popt
-plt.show()
+# pref_fit = np.poly1d(np.polyfit(Prange,Pref,28))
+# plt.plot(Prange,Pref,'g')
+# plt.plot(Prange,pref_fit(Prange),'r')
+# plt.savefig('pref_fit.pdf')
+# plt.show()
+# print(sum(abs(Pref-pref_fit(Prange))))
+
+
+# plt.title('TRANSFORMED MOIST ADIABATS')
+# plt.plot(Pref,norm_adiabats[:,0:Tmax],'b')
+# plt.plot(Pref,norm_adiabats[:,Tmax:],'r')
+# # plt.plot(norm_adiabats[:,0:50],Pref,'r')
+# # plt.plot(norm_adiabats[:,50:],Pref ,'b')
+# plt.xlim([0,1])
+# plt.xlabel('normalized pressure')
+# plt.ylim([0,1])
+# plt.ylabel('ref adiabat')
+# plt.savefig('trans_adiabats.pdf')
+# plt.show()
+
+
+# def pq(VAR,p,q,s):
+#         return 1- ((1-VAR)**(p))**(q)
+# p0 = (11,0.3,0.9)
+# store_args = np.zeros((len(p0),len(ThetaW)-1))
+# for nTh in range(len(ThetaW)-1):
+# # for i in range(6):
+#     popt, covp = curve_fit(pq,Pref,norm_adiabats[:,nTh+1],p0 = p0)
+#     store_args[:,nTh] = popt[:]
+#     plt.plot(Pref,pq(Pref,popt[0],popt[1],popt[2]),'r')
+#     plt.plot(Pref,norm_adiabats[:,nTh+1],'b')
+#     plt.xlim([0,1])
+#     plt.ylim([0,1])
+#     p0 = popt[:]
+#     print popt
+# plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # store_args = np.zeros((9,len(ThetaW)-1))
 # for i in range(len(ThetaW)-1):

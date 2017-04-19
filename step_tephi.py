@@ -1,68 +1,81 @@
+#=======================================================
+# This script is an updated version of the original tephigram work.
+# Created by: nmoissee@eoas.ubc.ca Nov 2016
+#=======================================================
+#INPUT
+Tmin=-40.
+Tmax=40.
+Pstep=0.001
+
+
+#=======================================================
 #import necessary packages 
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit, minimize
 from scipy import spatial
 
-# http://www.researchgate.net/publication/229942047_A_new_formula_for_latent_heat_of_vaporization_of_water_as_a_function_of_temperature
-
 #thermodynamic constants
-Rd = 287. 	#[J K^-1 kg^-1] gas constant for dry air
-Rv = 461. 	#[J K^-1 kg^-1] gas constant for water vapour
-Cp = 1005. 	#[J K^-1 kg^-1] specific heat of dry air at constant pressure
-# Lv = 2.5e6 	#latent heat of vapourization at standard temperature
-T0 = 273.16		#standard temperature
-e0 = 0.611657 	#kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
-
+Rd = 287.058    #[J K^-1 kg^-1] gas constant for dry air
+Rv = 461.5  #[J K^-1 kg^-1] gas constant for water vapour
+Cp = 1006.  #[J K^-1 kg^-1] specific heat of dry air at constant pressure
+# Lv = 2.501e6  #latent heat of vapourization at standard temperature
+T0 = 273.16     #standard temperature
+e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
 
 #derived constants
-Eps = Rd/Rv 	#dimensionless
-c1 = Rd/Cp 		#dimensionless
-# c2 = (Lv**2)/(Rv*Cp) 	#[K^2]
-# c3 = Lv/Cp 		#[K]
-c4 = 2490. 		#[K kg_air kg_vapour^-1]
+Eps = Rd/Rv     #dimensionless
+c1 = Rd/Cp      #dimensionless
+# c2 = (Lv**2)/(Rv*Cp)  #[K^2]
+# c3 = Lv/Cp        #[K]
 
 
-Prange = np.arange(100,1, -0.001)
-ThetaW = np.arange(-40.,40.)
+Prange = np.arange(100,1, -Pstep)
+ThetaW = np.arange(Tmin,Tmax)
+
 adiabats = np.empty((len(Prange),len(ThetaW)))
 dry_adiabats = np.empty_like(adiabats)
 eq_adiabats = np.empty_like(adiabats)
 
 def f_es(T):
+    #saturation vapour pressure
     #REPLACING STANDARD EQUATION WITH Koutsoyiannis 2011
     return  e0*np.exp(24.921*(1.-(T0/T)))*((T0/T)**5.06)
 def f_rs(P,es):
+    #saturated mixing ratio of water at temperature
     return  Eps*es / (P - es)
 def dTdP(P,T):
-    return (c1*T + c3*rs)/(P*(1+(c2*rs/T**2)))
+    return (c1*T + c3*rs)/(P*(1.+(c2*rs/T**2.)))
 def f_thE(T,rs0):
     # return T * np.exp(c4*rs0/T)
-    return T + c4*rs0
+    return T + Lv/Cp*rs0
     #second formula produces smaller error for positive ThetaW values
 
 
 for nT, Temp in enumerate(ThetaW):
     T = Temp + T0
     #------variable latent heat of vapourization constants-------
-    Lv = (2500.8 - 2.36*Temp + 0.0016*(Temp**2) - 0.00006*(Temp**3))*1000
-    c2 = (Lv**2)/(Rv*Cp) 	#[K^2]
-    c3 = Lv/Cp 		#[K]
+    # Lv = (2500.8 - 2.36*Temp + 0.0016*(Temp**2) - 0.00006*(Temp**3))*1000
+    Lv = 3.139e6 - 2336 * T #(Koutsoyiannis 2011) - theoretically derived
+    c2 = (Lv**2)/(Rv*Cp)    #[K^2]
+    c3 = Lv/Cp      #[K]
+    print c3
     #------------------------------------------------------------
     print('Current adiabat: %s' %Temp)
     
     for nP,Pres in enumerate(Prange):
         #get dry adiabat
-        dry_adiabats[nP,nT] = (Temp+T0)*((Pres/100.)**c1) 
+        dry_adiabats[nP,nT] = (Temp+T0)*((Pres/100.)**c1) #Temp + T0 to avoid overwrite
         #get moist adiabat
         es = f_es(T)
         rs = f_rs(Pres,es)
         grad = dTdP(Pres,T)
-        T = T - grad*0.001
+        T = T - grad*Pstep
         adiabats[nP,nT] = T
         #qet equivalent adiabat
         rs0 = f_rs(100.,es)
         eq_adiabats[nP,nT] = f_thE(T,rs0)
+
 
 #plot stuve's diagram
 plt.title('SANITY CHECK: "STUVE" PLOT')
@@ -84,8 +97,9 @@ plt.show()
 
 #plot normalized adiabats
 plt.title('NORMALIZED MOIST ADIABATS')
-norm_adiabats = (adiabats - dry_adiabats)/((eq_adiabats - dry_adiabats))
+norm_adiabats = (adiabats - dry_adiabats)/(eq_adiabats - dry_adiabats)
 plt.plot(norm_adiabats[:,0::10],Prange, 'b')
+plt.gca().invert_yaxis()
 plt.xlabel('normalized $\Theta_w$')
 plt.ylabel('pressure [kPa]')
 plt.savefig('norm_theta.pdf')
@@ -93,7 +107,7 @@ plt.show()
 
 
 #normailzing by one of the adiabats removes the non-linearity from the data
-plt.title('40C ADIABAT FIT')
+plt.title('SINGLE ADIABAT FIT')
 Pref = norm_adiabats[:,-1]
 pref_fit = np.poly1d(np.polyfit(Prange,Pref,28))
 plt.plot(Prange,Pref,'g')
@@ -104,10 +118,8 @@ print(sum(abs(Pref-pref_fit(Prange))))
 
 
 plt.title('TRANSFORMED MOIST ADIABATS')
-plt.plot(Pref,norm_adiabats[:,0:40],'b')
-plt.plot(Pref,norm_adiabats[:,40:],'r')
-# plt.plot(norm_adiabats[:,0:50],Pref,'r')
-# plt.plot(norm_adiabats[:,50:],Pref ,'b')
+plt.plot(Pref,norm_adiabats[:,0:Tmax],'b')
+plt.plot(Pref,norm_adiabats[:,Tmax:],'r')
 plt.xlim([0,1])
 plt.xlabel('normalized pressure')
 plt.ylim([0,1])
@@ -115,36 +127,15 @@ plt.ylabel('ref adiabat')
 plt.savefig('trans_adiabats.pdf')
 plt.show()
 
-
-# def tanfit (P, a,b,c,d):
-#         # return a*np.arctan(b**P) * np.exp(-c*P)
-#         return a * a*np.arctan(b**P)+ c*P + d
-# # p0 = (1.27133715e+00 ,  1.35999749e-03  , 6.99196638e+00 ,  1.00261648e+00)
-# p0 = (1.,1,1,1)
-# store_args = np.zeros((4,len(ThetaW)-1))
-# for i in range(len(ThetaW)-1):
-# # for i in range(6):
-#     popt, covp = curve_fit(tanfit,Pref,norm_adiabats[:,i+1],p0 = p0)
-#     store_args[:,i] = popt[:]
-#     plt.plot(Pref,tanfit(Pref,popt[0],popt[1],popt[2],popt[3]),'r')
-#     plt.plot(Pref,norm_adiabats[:,i+1],'b')
-#     plt.xlim([0,1])
-#     plt.ylim([0,1])
-#     plt.show()
-#     p0 = popt[:]
-#     print popt
-
-
 store_args = np.zeros((9,len(ThetaW)-1))
 for i in range(len(ThetaW)-1):
-# for i in range(6):
     main_pfit = np.poly1d(np.polyfit(Pref,norm_adiabats[:,i],8))
     store_args[:,i] = main_pfit.coeffs
     plt.plot(Pref,main_pfit(Pref),'r')
     plt.plot(Pref,norm_adiabats[:,i],'b')
     plt.xlim([0,1])
     plt.ylim([0,1])
-    plt.show()
+plt.show()
 
 
 fig = plt.figure(figsize=(14, 14)) 

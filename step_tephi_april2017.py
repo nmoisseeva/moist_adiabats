@@ -1,12 +1,12 @@
 #=======================================================
 # This script is an updated version of the original tephigram work.
-# Created by: nmoissee@eoas.ubc.ca Nov 2016
+# Created by: nmoissee@eoas.ubc.ca April 2017
 #=======================================================
 #INPUT
 Tmin=-40.
 Tmax=40.
 Pstep=0.001
-
+degree = 6      #degree of polinomial to model the curves
 
 #=======================================================
 #supress warnings
@@ -27,23 +27,22 @@ from scipy import spatial
 Rd = 287.058    #[J K^-1 kg^-1] gas constant for dry air
 Rv = 461.5  #[J K^-1 kg^-1] gas constant for water vapour
 Cp = 1006.  #[J K^-1 kg^-1] specific heat of dry air at constant pressure
-# Lv = 2.501e6  #latent heat of vapourization at standard temperature
 T0 = 273.16     #standard temperature
+P0 = 101.3      #kPa
 e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
 
 #derived constants
 Eps = Rd/Rv     #dimensionless
 c1 = Rd/Cp      #dimensionless
-# c2 = (Lv**2)/(Rv*Cp)  #[K^2]
-# c3 = Lv/Cp        #[K]
 
-
-Prange = np.arange(100,1, -Pstep)
+#create temp and pressure axes
+Prange = np.arange(P0,1, -Pstep)
 nThetaW = np.arange(Tmin,Tmax)
 
-arrayTHw = np.empty((len(Prange),len(nThetaW)))
-arrayTHd = np.empty_like(arrayTHw)
-arrayTHe = np.empty_like(arrayTHw)
+#create storage arrays
+arrayTHw = np.empty((len(Prange),len(nThetaW)))     #theta moist
+arrayTHd = np.empty_like(arrayTHw)                  #theta dry
+arrayTHe = np.empty_like(arrayTHw)                  #theta equivalent
 
 def f_es(T):
     #saturation vapour pressure
@@ -59,22 +58,18 @@ def f_thE(T,rs0):
     return T + Lv/Cp*rs0
     #second formula produces smaller error for positive ThetaW values
 
-
 for nT, THw in enumerate(nThetaW):
     T = THw + T0
-    Tz = np.copy(T) #save surface temperature which will be iterated up the pressure levels
+    Tz = np.copy(T)         #save surface temperature which will be iterated up the pressure levels
     #------variable latent heat of vapourization constants-------
-    # Lv = (2500.8 - 2.36*Temp + 0.0016*(Temp**2) - 0.00006*(Temp**3))*1000
     Lv = 3.139e6 - 2336 * T #(Koutsoyiannis 2011) - theoretically derived
     c2 = (Lv**2)/(Rv*Cp)    #[K^2]
     c3 = Lv/Cp      #[K]
-    # print c3
     #------------------------------------------------------------
     print('Current adiabat: %s' %THw)
-    
     for nP,P in enumerate(Prange):
         #get dry adiabat
-        arrayTHd[nP,nT] = T*((P/100.)**c1) #Temp + T0 to avoid overwrite
+        arrayTHd[nP,nT] = T*((P/P0)**c1) #Temp + T0 to avoid overwrite
         #get moist adiabat
         es = f_es(Tz)
         rs = f_rs(P,es)
@@ -82,69 +77,18 @@ for nT, THw in enumerate(nThetaW):
         Tz = Tz - grad*Pstep
         arrayTHw[nP,nT] = Tz
         #qet equivalent adiabat
-        rs0 = f_rs(100.,es)
+        rs0 = f_rs(P0,es)
         arrayTHe[nP,nT] = f_thE(Tz,rs0)
 
-#plot stuve's diagram
-plt.figure(figsize=(9,6))
-plt.title('SANITY CHECK: "STUVE" PLOT')
-plt.plot(arrayTHw[:,-1]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
-plt.plot(arrayTHd[:,-1]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
-plt.plot(arrayTHe[:,-1]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
-plt.plot(arrayTHw[:,0::10]-T0,Prange, 'b')
-plt.plot(arrayTHd[:,0::10]-T0,Prange, 'r--')
-plt.plot(arrayTHe[:,0::10]-T0,Prange, 'g:')
-plt.ylim([40,100])
-plt.gca().invert_yaxis()
-plt.xlim([-40,40])
-plt.grid()
-plt.xlabel("temperature [C]")
-plt.ylabel("pressure [kPa]")
-plt.legend(loc='upper right',fontsize=12)
-plt.savefig('./figs/stuve.pdf')
-plt.show()
-
-#plot normalized adiabats
-plt.title('NORMALIZED SATURATED ADIABATS $\\theta_{norm}$')
 arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
-plt.plot(arrayTHnorm[:,0::10],Prange, 'b')
-plt.gca().invert_yaxis()
-plt.xlim([0,1])
-plt.xlabel('normalized temperature')
-plt.ylabel('pressure [kPa]')
-plt.savefig('./figs/THnorm.pdf')
-plt.show()
-plt.close()
 
 #normailzing by one of the adiabats removes the non-linearity from the data
-plt.title('$\\theta_{ref} = \\theta_{40C}$ POLYNOMIAL FIT')
 THref = arrayTHnorm[:,-1]
 THref_fit = np.poly1d(np.polyfit(Prange,THref,28))
-plt.plot(THref,Prange,'g')
-plt.plot(THref_fit(Prange),Prange,'r')
-plt.gca().invert_yaxis()
-plt.xlim([0,1])
-plt.xlabel('normalized temperature')
-plt.ylabel('pressure [kPa]')
-plt.savefig('./figs/THref.pdf')
 MAE_THref = np.mean(abs(THref-THref_fit(Prange)))
 print('MAE for polynomial fit of +40C reference curve: %.2E' %MAE_THref)
-plt.show()
-plt.close()
 
-plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{trans}$')
-plt.plot(THref,arrayTHnorm[:,0:Tmax],'b')
-plt.plot(THref,arrayTHnorm[:,Tmax:],'r')
-plt.xlim([0,1])
-plt.xlabel('reference saturated adiabat')
-plt.ylim([0,1])
-plt.ylabel('transformated saturated adiabats')
-plt.savefig('./figs/THtrans.pdf')
-plt.show()
-plt.close()
-
-degree = 7 #degree of polinomial to model the curves
-# Now model the fit parameters (for 8th degree polynomial)
+# Now model,store coeffs and plot (for specified degree polynomial)
 store_args = np.zeros((degree+1,len(nThetaW)-1))
 tags = ['k%s' %(i+1) for i in range(degree+1)]
 for i in range(len(nThetaW)-1):
@@ -155,28 +99,18 @@ for i in range(len(nThetaW)-1):
     plt.xlim([0,1])
     plt.ylim([0,1])
 plt.show()
+plt.close()
 
-fig = plt.figure(figsize=(9, 9)) 
-plt.suptitle('FIT PARAMETERS')
+#no do fits for individual parameters
 xvals = nThetaW[:-1]
-#fits for individual parameters
 fitFCNs = []
 for iDeg in range(degree):
     pfit = np.poly1d(np.polyfit(xvals,store_args[iDeg,:],25))
-    plt.subplot(3,3,iDeg+1)
-    plt.title(tags[iDeg])
-    plt.plot(xvals,store_args[iDeg,:],'g')
-    plt.plot(xvals,pfit(xvals),'r')
     MAE = np.mean(abs(store_args[iDeg,:] - pfit(xvals)))
     print('%s MAE = %0.2E' %(tags[iDeg],MAE))
     fitFCNs.append(pfit)
-plt.tight_layout()
-
-plt.savefig('./figs/fit_params.pdf')
-plt.show()
 
 #+!!!!!!! STOPPED THE EDITS HERE
-
 #TESTING THE METHOD======================================
 fit_adiabats = np.empty_like(adiabats)
 # for nT, Temp in enumerate(testvals):
@@ -218,3 +152,82 @@ plt.xlabel("normalized mean error")
 plt.ylabel("pressure [kPa]")
 plt.savefig('error_profile.pdf')
 plt.show()
+
+
+
+
+
+#=====================PLOTTING===========================
+#plot stuve's diagram
+plt.figure(figsize=(9,6))
+plt.title('SANITY CHECK: "STUVE" PLOT')
+plt.plot(arrayTHw[:,-1]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
+plt.plot(arrayTHd[:,-1]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
+plt.plot(arrayTHe[:,-1]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
+plt.plot(arrayTHw[:,0::10]-T0,Prange, 'b')
+plt.plot(arrayTHd[:,0::10]-T0,Prange, 'r--')
+plt.plot(arrayTHe[:,0::10]-T0,Prange, 'g:')
+plt.ylim([40,101])
+plt.gca().invert_yaxis()
+plt.xlim([-40,40])
+plt.grid()
+plt.xlabel("temperature [C]")
+plt.ylabel("pressure [kPa]")
+plt.legend(loc='upper right',fontsize=12)
+plt.savefig('./figs/stuve.pdf')
+plt.show()
+plt.close()
+
+#plot normalized adiabats
+plt.title('NORMALIZED SATURATED ADIABATS $\\theta_{norm}$')
+plt.plot(arrayTHnorm[:,0::10],Prange, 'b')
+plt.gca().invert_yaxis()
+plt.xlim([0,1])
+plt.ylim([101,1])
+plt.xlabel('normalized temperature')
+plt.ylabel('pressure [kPa]')
+plt.savefig('./figs/THnorm.pdf')
+plt.show()
+plt.close()
+
+#plot fit of single adiabat THref
+plt.title('$\\theta_{ref} = \\theta_{40C}$ POLYNOMIAL FIT')
+plt.plot(THref,Prange,'g')
+plt.plot(THref_fit(Prange),Prange,'r')
+plt.gca().invert_yaxis()
+plt.xlim([0,1])
+plt.xlabel('normalized temperature')
+plt.ylabel('pressure [kPa]')
+plt.savefig('./figs/THref.pdf')
+plt.show()
+plt.close()
+
+#plot transformed adiabats
+plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{trans}$')
+plt.plot(THref,arrayTHnorm[:,0:Tmax],'b')
+plt.plot(THref,arrayTHnorm[:,Tmax:],'r')
+plt.xlim([0,1])
+plt.xlabel('reference saturated adiabat')
+plt.ylim([0,1])
+plt.ylabel('transformated saturated adiabats')
+plt.savefig('./figs/THtrans.pdf')
+plt.show()
+plt.close()
+
+#subplot of fits for individual parameters
+fig = plt.figure(figsize=(10, 10)) 
+plt.suptitle('FIT PARAMETERS')
+for iDeg in range(degree):
+    plt.subplot(3,3,iDeg+1)
+    plt.title(tags[iDeg])
+    plt.xlabel('temperature [K]')
+    plt.plot(xvals,store_args[iDeg,:],'g')
+    plt.plot(xvals,fitFCNs[iDeg](xvals),'r')
+# plt.tight_layout()
+plt.subplots_adjust(top = .92, hspace=0.3, wspace=0.2, left=0.05, right=0.97, bottom=0.05)
+plt.savefig('./figs/fit_params.pdf')
+
+plt.show()
+plt.close()
+
+

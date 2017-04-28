@@ -5,8 +5,9 @@
 #INPUT
 Tmin=-35.
 Tmax=36.
-Pstep=0.001
-degree = 8      #degree of polinomial to model the curves
+Pstep=0.0001
+Ptop = 0.1    #kPa - upper atmosphere limit surface
+degree =10      #degree of polinomial to model the curves
 
 #=======================================================
 #supress warnings
@@ -36,13 +37,15 @@ Eps = Rd/Rv     #dimensionless
 c1 = Rd/Cp      #dimensionless
 
 #create temp and pressure axes
-Prange = np.arange(P0,1, -Pstep)
+Prange = np.arange(P0,Ptop, -Pstep)
 nThetaW = np.arange(Tmin,Tmax)
 
 #create storage arrays
 arrayTHw = np.empty((len(nThetaW),len(Prange)))     #theta moist
 arrayTHd = np.empty_like(arrayTHw)                  #theta dry
-arrayTHe = np.empty_like(arrayTHw)                  #theta equivalent
+arrayTHe_form = np.empty_like(arrayTHw)             #calculated from sat vapour pressure at T
+arrayTHe_surf = np.empty_like(arrayTHw)             #calculated from surface THe
+arrayTHe = np.empty_like(arrayTHw)                  #theta equivalent (from ref pressure level)
 
 def f_es(T):
     #saturation vapour pressure
@@ -54,8 +57,10 @@ def f_rs(P,es):
 def dTdP(P,T):
     return (c1*T + c3*rs)/(P*(1.+(c2*rs/T**2.)))
 def f_thE(T,rs0):
-    return T + Lv/Cp*rs0
-
+    # return T*np.exp((Lv*rs0)/(Cp*T))  #holton 
+    return T * np.exp((rs0* (Lv+1.137e6*rs0) )/(Cp * T))   #David-Jones6.5
+    # return T * np.exp(((2.5643e6 - 1790*(T-T0))*rs0)*(1+0.448*rs0)/(Cp * T))   #David-JonesB39
+    # return T * np.exp((2.569e6-900*((T-T0)))*rs0 /(Cp*T) )
 
 WofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
 WofTPmodel = np.empty_like(WofTPreal)*np.nan
@@ -83,15 +88,21 @@ for nT, THw in enumerate(nThetaW):
         Tz = Tz - grad*Pstep
         arrayTHw[nT,nP] = Tz
         #qet equivalent adiabat
-        # es = f_es(Tz)
-        # rs0 = f_rs(P0,es)
-        # arrayTHe[nT,nP] = f_thE(Tz,rs0)
+        es = f_es(Tz)
+        rs0 = f_rs(P0,es)
+        arrayTHe_form[nT,nP] = f_thE(Tz,rs0)
         arrayTHe[nT,nP] = THe0*((P/P0)**c1)
+        
+
         Tc = Tz-T0
 
         if any((nThetaW-Tc)<0.00001):
             Tidx = nThetaW.tolist().index(int(Tc))
             WofTPreal[Tidx,nP] = THw
+    # for nP,P in enumerate(Prange):
+    #     print Tz      
+    #     arrayTHe[nT,nP] = Tz * ((P/Ptop)**c1)
+
 
 arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
 
@@ -99,7 +110,7 @@ arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
 THref = arrayTHnorm[-1,:]
 THref_fit = np.poly1d(np.polyfit(Prange,THref,28))
 MAE_THref = np.mean(abs(THref-THref_fit(Prange)))
-print('MAE for polynomial fit of +40C reference curve: %.2E' %MAE_THref)
+print('MAE for polynomial fit of Tmax reference curve: %.2E' %MAE_THref)
 
 # Now model,store coeffs and plot (for specified degree polynomial)
 numterms = degree+1
@@ -182,6 +193,7 @@ for nT, THw in enumerate(nThetaW):
 
 
 arrayDiffTemp = arrayTHw-arrayTHwm
+arrayDiffTHe = arrayTHe - arrayTHe_form
 
 #attempt to get THw from TP
 # for nT, THw in enumerate(nThetaW):
@@ -214,9 +226,9 @@ plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature 
 plt.plot(arrayTHw[0::10,:].T-T0,Prange, 'b')
 plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
 plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
-plt.ylim([40,101])
+# plt.ylim([40,101])
 plt.gca().invert_yaxis()
-plt.xlim([-40,40])
+# plt.xlim([-40,40])
 plt.grid()
 plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
@@ -229,7 +241,7 @@ plt.close()
 plt.title('NORMALIZED SATURATED ADIABATS $\\theta_{norm}$')
 plt.plot(Prange,arrayTHnorm[0::10,:].T, 'b')
 plt.gca().invert_xaxis()
-plt.ylim([0,1.1])
+# plt.ylim([0,1.1])
 plt.xlim([101,1])
 plt.ylabel('normalized temperature')
 plt.xlabel('pressure [kPa]')
@@ -296,7 +308,7 @@ plt.show()
 #plot error distribution contours
 plt.figure(figsize=(8,6))
 plt.title('ERROR CONTOURS OF $\\theta_{norm}$')
-plt.imshow(arrayDiff.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-0.001,vmax=0.001)
+plt.imshow(arrayDiff.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-0.005,vmax=0.005)
 plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
 ax = plt.gca()
@@ -323,7 +335,6 @@ plt.colorbar()
 plt.savefig('./figs/DiffContoursTemp.pdf')
 plt.show()
 
-
 #plot stuve's diagram with modelled adiabats
 plt.figure(figsize=(9,6))
 plt.title('TESTING')
@@ -347,17 +358,55 @@ plt.show()
 plt.close()
 
 
-#plot THw(TP)
+#plot difference between THe calculations
+plt.figure(figsize=(9,6))
+plt.title('ERROR direct vs formula THe calculation')
+plt.plot(arrayTHw[-1,:]-T0,Prange, 'b:',label='moist adiabat $\\theta_w$')
+plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
+plt.plot(arrayTHe[-1,:]-T0,Prange, 'g',label='equivalent potential temperature direct $\\theta_{ed}$')
+plt.plot(arrayTHe_form[-1,:]-T0,Prange, 'y',label='equivalent potential temperatire formula $\\theta_{ef}$')
+plt.plot(arrayTHw[0::5,:].T-T0,Prange, 'b:')
+plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
+plt.plot(arrayTHe[0::5,:].T-T0,Prange, 'g')
+plt.plot(arrayTHe_form[0::5,:].T-T0,Prange, 'y')
+plt.ylim([40,101])
+plt.gca().invert_yaxis()
+plt.xlim([-40,60])
+plt.grid()
+plt.xlabel("temperature [C]")
+plt.ylabel("pressure [kPa]")
+plt.legend(loc='upper right',fontsize=12)
+plt.savefig('./figs/THe_error.pdf')
+plt.show()
+plt.close()
+
+#plot error distribution of different THe
 plt.figure(figsize=(8,6))
-plt.title('$\\theta_{w}(T,P)$')
-plt.imshow(WofTP_MAE.T,aspect='auto',origin='lower',cmap='RdBu_r')
+plt.title('ABSOLUTE ERROR (C) in THe')
+plt.imshow(arrayDiffTHe.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-15, vmax=15)
 plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
 ax = plt.gca()
-ax.set_xticks(np.arange(0,len(nThetaW),5))
-# ax.set_yticks([1300,51300,100300])
-ax.set_xticklabels(nThetaW[::5])
-# ax.set_yticklabels([100,50,1])
+ax.set_xticks(np.arange(0,len(nThetaW),10))
+ax.set_yticks([1300,51300,100300])
+ax.set_xticklabels(nThetaW[::10])
+ax.set_yticklabels([100,50,1])
 plt.colorbar()
-# plt.savefig('./figs/DiffContoursTemp.pdf')
+plt.savefig('./figs/DiffContoursTHe.pdf')
 plt.show()
+
+
+# #plot THw(TP)
+# plt.figure(figsize=(8,6))
+# plt.title('$\\theta_{w}(T,P)$')
+# plt.imshow(WofTP_MAE.T,aspect='auto',origin='lower',cmap='RdBu_r')
+# plt.xlabel("temperature [C]")
+# plt.ylabel("pressure [kPa]")
+# ax = plt.gca()
+# ax.set_xticks(np.arange(0,len(nThetaW),5))
+# # ax.set_yticks([1300,51300,100300])
+# ax.set_xticklabels(nThetaW[::5])
+# # ax.set_yticklabels([100,50,1])
+# plt.colorbar()
+# # plt.savefig('./figs/DiffContoursTemp.pdf')
+# plt.show()

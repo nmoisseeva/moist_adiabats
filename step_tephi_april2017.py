@@ -4,9 +4,9 @@
 #=======================================================
 #INPUT
 Tmin=-35.
-Tmax=36.
-Pstep=0.0001
-Ptop = 0.1    #kPa - upper atmosphere limit surface
+Tmax=35.
+# Pstep=0.0001
+Ptop = 1    #kPa - upper atmosphere limit surface
 degree =10      #degree of polinomial to model the curves
 
 #=======================================================
@@ -36,15 +36,23 @@ e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
 Eps = Rd/Rv     #dimensionless
 c1 = Rd/Cp      #dimensionless
 
+
 #create temp and pressure axes
-Prange = np.arange(P0,Ptop, -Pstep)
+Pbrange = np.arange(P0,10,-0.0001)
+Pmrange = np.arange(10,2,-0.00001)
+Ptrange = np.arange(2,Ptop,-0.000001)
+
+PrangeList = np.concatenate((Pbrange,Pmrange,Ptrange))
+Prange = PrangeList[:-1]
+
+#create temp and pressure axes
+# Prange = np.arange(P0,Ptop, -Pstep)
 nThetaW = np.arange(Tmin,Tmax)
 
 #create storage arrays
 arrayTHw = np.empty((len(nThetaW),len(Prange)))     #theta moist
 arrayTHd = np.empty_like(arrayTHw)                  #theta dry
-arrayTHe_form = np.empty_like(arrayTHw)             #calculated from sat vapour pressure at T
-arrayTHe_surf = np.empty_like(arrayTHw)             #calculated from surface THe
+# arrayTHe_form = np.empty_like(arrayTHw)             #calculated from sat vapour pressure at T
 arrayTHe = np.empty_like(arrayTHw)                  #theta equivalent (from ref pressure level)
 
 def f_es(T):
@@ -62,8 +70,8 @@ def f_thE(T,rs0):
     # return T * np.exp(((2.5643e6 - 1790*(T-T0))*rs0)*(1+0.448*rs0)/(Cp * T))   #David-JonesB39
     # return T * np.exp((2.569e6-900*((T-T0)))*rs0 /(Cp*T) )
 
-WofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
-WofTPmodel = np.empty_like(WofTPreal)*np.nan
+# WofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
+# WofTPmodel = np.empty_like(WofTPreal)*np.nan
 
 for nT, THw in enumerate(nThetaW):
     T = THw + T0
@@ -80,71 +88,61 @@ for nT, THw in enumerate(nThetaW):
     print('Current adiabat: %s' %THw)
     for nP,P in enumerate(Prange):
         #get dry adiabat
-        arrayTHd[nT,nP] = T*((P/P0)**c1) #Temp + T0 to avoid overwrite
+        arrayTHd[nT,nP] = T*((P/P0)**c1) 
+        #qet equivalent adiabat
+        arrayTHe[nT,nP] = THe0*((P/P0)**c1)
         #get moist adiabat
         es = f_es(Tz)
         rs = f_rs(P,es)
         grad = dTdP(P,Tz)
+        Pstep = P - PrangeList[nP+1]
         Tz = Tz - grad*Pstep
         arrayTHw[nT,nP] = Tz
-        #qet equivalent adiabat
-        es = f_es(Tz)
-        rs0 = f_rs(P0,es)
-        arrayTHe_form[nT,nP] = f_thE(Tz,rs0)
-        arrayTHe[nT,nP] = THe0*((P/P0)**c1)
-        
 
-        Tc = Tz-T0
-
-        if any((nThetaW-Tc)<0.00001):
-            Tidx = nThetaW.tolist().index(int(Tc))
-            WofTPreal[Tidx,nP] = THw
-    # for nP,P in enumerate(Prange):
-    #     print Tz      
-    #     arrayTHe[nT,nP] = Tz * ((P/Ptop)**c1)
-
+        # Tc = Tz-T0
+        # if any((nThetaW-Tc)<0.00001):
+        #     Tidx = nThetaW.tolist().index(int(Tc))
+        #     WofTPreal[Tidx,nP] = THw
 
 arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
 
+#monotonically select points every 0.1 kPa for fitting
+PrangeIdx = [np.argmin(abs(PrangeList - i)) for i in np.arange(P0,1,-0.1)]
+PrangeFit = Prange[PrangeIdx]
+
 #normailzing by one of the adiabats removes the non-linearity from the data
 THref = arrayTHnorm[-1,:]
-THref_fit = np.poly1d(np.polyfit(Prange,THref,28))
-MAE_THref = np.mean(abs(THref-THref_fit(Prange)))
+THref_fit = np.poly1d(np.polyfit(PrangeFit,THref[PrangeIdx],20))
+MAE_THref = np.mean(abs(THref[PrangeIdx]-THref_fit(PrangeFit)))
 print('MAE for polynomial fit of Tmax reference curve: %.2E' %MAE_THref)
 
 # Now model,store coeffs and plot (for specified degree polynomial)
+print('Fitting polynomials to normalized curves')
 numterms = degree+1
 store_args = np.zeros((numterms,len(nThetaW)))
-# store_args = np.zeros((numterms,len(nThetaW)-1))
-
 tags = ['k%s' %(i+1) for i in range(numterms)]
-# for i in range(len(nThetaW)-1):
 for i in range(len(nThetaW)):
-
-    main_pfit = np.poly1d(np.polyfit(THref,arrayTHnorm[i,:],degree))
+    main_pfit = np.poly1d(np.polyfit(THref[PrangeIdx],arrayTHnorm[i,PrangeIdx],degree))
     store_args[:,i] = main_pfit.coeffs
     plt.plot(THref,main_pfit(THref),'r')
     plt.plot(THref,arrayTHnorm[i,:],'b')
     plt.xlim([0,1])
     plt.ylim([0,1])
-plt.show()
+# plt.show()
 plt.close()
 
 #now do fits for individual parameters
-# xvals = nThetaW[:-1]
+print('Fitting polynomials to curve parameters')
 fitFCNs = []
 for iDeg in range(numterms):
-    # pfit = np.poly1d(np.polyfit(xvals,store_args[iDeg,:],25))
     pfit = np.poly1d(np.polyfit(nThetaW,store_args[iDeg,:],25))
-    # MAE = np.mean(abs(store_args[iDeg,:] - pfit(xvals)))
     MAE = np.mean(abs(store_args[iDeg,:] - pfit(nThetaW)))
     print('%s MAE = %0.2E' %(tags[iDeg],MAE))
     fitFCNs.append(pfit)
 
 #TESTING THE METHOD======================================
 print('Evaluating polynomial fit method....')
-arrayTHfit = np.empty_like(arrayTHw)
-# for nT, Temp in enumerate(xvals):
+arrayTHfit = np.zeros((len(nThetaW),len(PrangeFit)))
 
 for nT, T in enumerate(nThetaW):
     print('.....current adiabat: %s' %T)
@@ -153,7 +151,7 @@ for nT, T in enumerate(nThetaW):
     for iDeg in range(numterms):
         k.append(fitFCNs[iDeg](T))
     #fit the moist adiabats
-    for nP,P in enumerate(Prange):
+    for nP,P in enumerate(PrangeFit):
         THrefm = THref_fit(P)        
         THfit = 0.
         #sum up the polynomial terms
@@ -161,60 +159,32 @@ for nT, T in enumerate(nThetaW):
             THfit = THfit + k[iDeg]*THrefm**(degree-iDeg)
         arrayTHfit[nT,nP] = THfit
 
-arrayDiff = arrayTHnorm-arrayTHfit
+arrayDiff = arrayTHnorm[:,PrangeIdx]-arrayTHfit
 MAE = np.mean(abs(arrayDiff),0)
 
 
-
 #convert back to true adiabats
-arrayTHwm = np.empty_like(arrayTHw)
-arrayTHem = np.empty_like(arrayTHw)
+arrayTHwm = np.empty_like(arrayTHfit)
 
 for nT, THw in enumerate(nThetaW):
     T = THw + T0
+    Tz = np.copy(T)         #save surface temperature which will be iterated up the pressure levels
     #------variable latent heat of vapourization constants-------
     Lv = 3.139e6 - 2336 * T #(Koutsoyiannis 2011) - theoretically derived
     c2 = (Lv**2)/(Rv*Cp)    #[K^2]
     c3 = Lv/Cp      #[K]
     #------------------------------------------------------------
-    for nP,P in enumerate(Prange):
+    for nP,P in enumerate(PrangeFit):
         es = f_es(T)
         rs0 = f_rs(P0,es)
-        # arrayTHem[nT,nP] = f_thE(T,rs0)
-        # arrayTHdm[nT,nP] = (arrayTHfit[nT,nP]*arrayTHem[nT,nP] - T)/(1+arrayTHfit[nT,nP])
-        # arrayTm[nT,nP] = arrayTHdm[nT,nP]*((P/P0)**c1)
         THe = f_thE(T,rs0) * ((P/P0)**c1)
-        arrayTHem[nT,nP] = THe
+        # arrayTHem[nT,nP] = THe
         THfit = arrayTHfit[nT,nP]
-        # THd = T + THfit*(THe-T)
         THd = T*((P/P0)**c1)
-        # arrayTHwm[nT,nP] = THd*((P/P0)**c1)
         arrayTHwm[nT,nP] = THfit*(THe-THd) + THd
 
 
-arrayDiffTemp = arrayTHw-arrayTHwm
-arrayDiffTHe = arrayTHe - arrayTHe_form
-
-#attempt to get THw from TP
-# for nT, THw in enumerate(nThetaW):
-#     T = THw + T0
-#     #------variable latent heat of vapourization constants-------
-#     Lv = 3.139e6 - 2336 * T #(Koutsoyiannis 2011) - theoretically derived
-#     c2 = (Lv**2)/(Rv*Cp)    #[K^2]
-#     c3 = Lv/Cp      #[K]
-#     #------------------------------------------------------------
-#     for nP,P in enumerate(Prange):
-#         es = f_es(T)
-#         rs0 = f_rs(P0,es)
-#         THe = f_thE(T,rs0)
-#         THfit = arrayTHfit[nT,nP]   ## THIS PART IS WRONG, GETS THnorm of THw not of T
-#         WofTPmodel[nT,nP] = ((P/P0)**c1)*(THfit*THe - T) / (THfit-1)
-# WofTPmodelC = WofTPmodel - T0
-# WofTPmodelC[np.isnan(WofTPreal)] = np.nan
-# WofTP_MAE = WofTPreal -  WofTPmodelC
-
-
-
+arrayDiffTemp = arrayTHw[:,PrangeIdx]-arrayTHwm
 
 #=====================PLOTTING===========================
 #plot stuve's diagram
@@ -234,7 +204,7 @@ plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
 plt.legend(loc='upper right',fontsize=12)
 plt.savefig('./figs/stuve.pdf')
-plt.show()
+# plt.show()
 plt.close()
 
 #plot normalized adiabats
@@ -271,7 +241,7 @@ plt.xlabel('reference saturated adiabat')
 plt.ylim([0,1])
 plt.ylabel('transformated saturated adiabats')
 plt.savefig('./figs/THtrans.pdf')
-plt.show()
+# plt.show()
 plt.close()
 
 #subplot of fits for individual parameters
@@ -295,7 +265,7 @@ plt.close()
 plt.figure(figsize=(8,6))
 plt.title('TRUE AND MODELLED $\\theta_{norm}$')
 plt.plot(Prange,arrayTHnorm[1::10,:].T,color='g', label='directly computed $\\theta_{norm}$')
-plt.plot(Prange,arrayTHfit[1::10,:].T,'r',label='modelled $\\theta_{norm}$')
+plt.plot(PrangeFit,arrayTHfit[1::10,:].T,'r',label='modelled $\\theta_{norm}$')
 plt.gca().invert_xaxis()
 plt.xlim([101,1])
 plt.ylim([0,1.1])
@@ -304,6 +274,7 @@ plt.ylabel("normalized moist adiabats")
 plt.xlabel("pressure [kPa]")
 plt.savefig('./figs/THfit.pdf')
 plt.show()
+plt.close()
 
 #plot error distribution contours
 plt.figure(figsize=(8,6))
@@ -313,12 +284,13 @@ plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
 ax = plt.gca()
 ax.set_xticks(np.arange(0,len(nThetaW),10))
-ax.set_yticks([1300,51300,100300])
+# ax.set_yticks([1300,51300,100300])
 ax.set_xticklabels(nThetaW[::10])
-ax.set_yticklabels([100,50,1])
+# ax.set_yticklabels([100,50,1])
 plt.colorbar()
 plt.savefig('./figs/DiffContours.pdf')
-plt.show()
+# plt.show()
+plt.close()
 
 #plot error distribution contours in degrees
 plt.figure(figsize=(8,6))
@@ -328,12 +300,13 @@ plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
 ax = plt.gca()
 ax.set_xticks(np.arange(0,len(nThetaW),10))
-ax.set_yticks([1300,51300,100300])
+ax.set_yticks(np.arange(13,len(PrangeFit),200))
 ax.set_xticklabels(nThetaW[::10])
-ax.set_yticklabels([100,50,1])
+ax.set_yticklabels(np.arange(100,1,-20))
 plt.colorbar()
 plt.savefig('./figs/DiffContoursTemp.pdf')
 plt.show()
+plt.close()
 
 #plot stuve's diagram with modelled adiabats
 plt.figure(figsize=(9,6))
@@ -341,11 +314,11 @@ plt.title('TESTING')
 plt.plot(arrayTHw[-1,:]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
 plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
 plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
-plt.plot(arrayTHwm[-1,:]-T0,Prange, 'y',label='modelled moist adiabat $\\theta_{mod}$')
+plt.plot(arrayTHwm[-1,:]-T0,PrangeFit, 'y',label='modelled moist adiabat $\\theta_{mod}$')
 plt.plot(arrayTHw[0::5,:].T-T0,Prange, 'b')
 plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
 plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
-plt.plot(arrayTHwm[0::5,:].T-T0,Prange, 'y')
+plt.plot(arrayTHwm[0::5,:].T-T0,PrangeFit, 'y')
 plt.ylim([40,101])
 plt.gca().invert_yaxis()
 plt.xlim([-40,40])
@@ -357,43 +330,6 @@ plt.legend(loc='upper right',fontsize=12)
 plt.show()
 plt.close()
 
-
-#plot difference between THe calculations
-plt.figure(figsize=(9,6))
-plt.title('ERROR direct vs formula THe calculation')
-plt.plot(arrayTHw[-1,:]-T0,Prange, 'b:',label='moist adiabat $\\theta_w$')
-plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
-plt.plot(arrayTHe[-1,:]-T0,Prange, 'g',label='equivalent potential temperature direct $\\theta_{ed}$')
-plt.plot(arrayTHe_form[-1,:]-T0,Prange, 'y',label='equivalent potential temperatire formula $\\theta_{ef}$')
-plt.plot(arrayTHw[0::5,:].T-T0,Prange, 'b:')
-plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
-plt.plot(arrayTHe[0::5,:].T-T0,Prange, 'g')
-plt.plot(arrayTHe_form[0::5,:].T-T0,Prange, 'y')
-plt.ylim([40,101])
-plt.gca().invert_yaxis()
-plt.xlim([-40,60])
-plt.grid()
-plt.xlabel("temperature [C]")
-plt.ylabel("pressure [kPa]")
-plt.legend(loc='upper right',fontsize=12)
-plt.savefig('./figs/THe_error.pdf')
-plt.show()
-plt.close()
-
-#plot error distribution of different THe
-plt.figure(figsize=(8,6))
-plt.title('ABSOLUTE ERROR (C) in THe')
-plt.imshow(arrayDiffTHe.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-15, vmax=15)
-plt.xlabel("temperature [C]")
-plt.ylabel("pressure [kPa]")
-ax = plt.gca()
-ax.set_xticks(np.arange(0,len(nThetaW),10))
-ax.set_yticks([1300,51300,100300])
-ax.set_xticklabels(nThetaW[::10])
-ax.set_yticklabels([100,50,1])
-plt.colorbar()
-plt.savefig('./figs/DiffContoursTHe.pdf')
-plt.show()
 
 
 # #plot THw(TP)

@@ -3,10 +3,10 @@
 # Created by: nmoissee@eoas.ubc.ca May 2017
 #=======================================================
 #INPUT
-Tmin=5.
-Tmax=10.
-Pstep=0.00001
-Ptop = 1    #kPa - upper atmosphere limit surface
+Tmin=-60.
+Tmax=40.
+# Pstep=0.0001
+Ptop = 10    #kPa - upper atmosphere limit surface
 degree =10      #degree of polinomial to model the curves
 
 #=======================================================
@@ -36,9 +36,19 @@ e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
 Eps = Rd/Rv     #dimensionless
 c1 = Rd/Cp      #dimensionless
 
-Prange = (P0,Ptop)
-nThetaW = np.arange(Tmin,Tmax)
-# nThetaWlist = [round(i,2) for i in nThetaW]
+
+#create temp and pressure axes
+Pbrange = np.arange(P0,12,-0.0001)
+Pmrange = np.arange(12,11,-0.0001)
+Ptrange = np.arange(11,Ptop,-0.00001)
+
+PrangeList = np.concatenate((Pbrange,Pmrange,Ptrange))
+Prange = PrangeList[:-1]
+
+nThetaW = np.arange(Tmin,Tmax, 0.1)
+# nThetaW = np.arange(Tmin,Tmax, 1)
+
+nThetaWlist = [round(i,2) for i in nThetaW]
 
 #create storage arrays
 arrayTHw = np.empty((len(nThetaW),len(Prange)))     #theta moist
@@ -58,49 +68,78 @@ def f_thE(T,rs0):
     # return T*np.exp((Lv*rs0)/(Cp*T))  #holton 
     return T * np.exp((rs0* (Lv+1.137e6*rs0) )/(Cp * T))   #David-Jones6.5
 
-# WofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
-# EofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
-# DofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
+WofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
+EofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
+DofTPreal = np.zeros((len(nThetaW),len(Prange)))*np.nan
 # WofTPmodel = np.empty_like(WofTPreal)*np.nan
 
-for nT, Tc in enumerate(nThetaW):
-    Tk = Tc + T0
+# for nT, Tc in enumerate(nThetaW):
+#     Tk = Tc + T0
     
+#     #------variable latent heat of vapourization constants-------
+#     Lv = 3.139e6 - 2336 * Tk #(Koutsoyiannis 2011) - theoretically derived
+#     c2 = (Lv**2)/(Rv*Cp)    #[K^2]
+#     c3 = Lv/Cp      #[K]
+#     #------------------------------------------------------------
+#     print('Current temperature: %s' %Tc)
+#     for nPi,Pi in enumerate(Prange):
+#         subPrange = np.arange(Pi,P0,Pstep)
+#         Tz = np.copy(Tk)      #save current temperature
+#         for nPj,Pj in enumerate(subPrange):
+            
+#             #get moist adiabat
+#             es = f_es(Tz)
+#             rs = f_rs(Pj,es)
+#             grad = dTdP(Pj,Tz)
+#             Tz = Tz + grad*Pstep
+#         arrayTHw[nT,nPi] = Tz
+
+
+#         #qet equivalent adiabat
+#         es0 = f_es(Tz)
+#         rs0 = f_rs(P0,es0)
+#         THe0 = f_thE(Tz,rs0)
+#         arrayTHe[nT,nPi] = THe0*((Pi/P0)**c1)
+#         #get dry adiabat
+#         arrayTHd[nT,nPi] = Tz*((Pi/P0)**c1) 
+
+for nT, THw in enumerate(nThetaW):
+    T = THw + T0
+    Tz = np.copy(T)         #save surface temperature which will be iterated up the pressure levels
     #------variable latent heat of vapourization constants-------
-    Lv = 3.139e6 - 2336 * Tk #(Koutsoyiannis 2011) - theoretically derived
+    Lv = 3.139e6 - 2336 * T #(Koutsoyiannis 2011) - theoretically derived
     c2 = (Lv**2)/(Rv*Cp)    #[K^2]
     c3 = Lv/Cp      #[K]
+
+    es0 = f_es(T)
+    rs0 = f_rs(P0,es0)
+    THe0 = f_thE(T,rs0)
     #------------------------------------------------------------
-    print('Current temperature: %s' %Tc)
-    for nPi,Pi in enumerate(Prange):
-        supPrange = (Pi,P0,Pstep)
-        Tz = np.copy(Tk)      #save current temperature
-        for nPj,Pj in enumerate(Prange):
-            
-            #get moist adiabat
-            es = f_es(Tz)
-            rs = f_rs(Pj,es)
-            grad = dTdP(Pj,Tz)
-            Tz = Tz + grad*Pstep
+    print('Current adiabat: %s' %THw)
+    for nP,P in enumerate(Prange):
+        #get dry adiabat
+        arrayTHd[nT,nP] = T*((P/P0)**c1) 
+        #qet equivalent adiabat
+        arrayTHe[nT,nP] = THe0*((P/P0)**c1)
+        #get moist adiabat
+        es = f_es(Tz)
+        rs = f_rs(P,es)
+        grad = dTdP(P,Tz)
+        Pstep = P - PrangeList[nP+1]
+        Tz = Tz - grad*Pstep
         arrayTHw[nT,nP] = Tz
 
-
-        #qet equivalent adiabat
-        es0 = f_es(Tz)
-        rs0 = f_rs(P0,es0)
-        THe0 = f_thE(Tz,rs0)
-        arrayTHe[nT,nP] = THe0*((P/P0)**c1)
-        #get dry adiabat
-        arrayTHd[nT,nP] = Tz*((P/P0)**c1) 
-
-        # Tc = Tz-T0
-        # if any((nThetaW-Tc)<0.0001):
+        Tc = Tz-T0
+        if any((nThetaW-Tc)<0.0001):
             # Tidx = nThetaWlist.index(round(Tc,1))
-            # WofTPreal[Tidx,nP] = T
-            # EofTPreal[Tidx,nP] = THe0*((P/P0)**c1)
-            # DofTPreal[Tidx,nP] = T*((P/P0)**c1)
+            Tidx = nThetaWlist.index(int(Tc))
+            WofTPreal[Tidx,nP] = T
+            EofTPreal[Tidx,nP] = THe0*((P/P0)**c1)
+            DofTPreal[Tidx,nP] = T*((P/P0)**c1)
 
-arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
+save_dict = {'W':WofTPreal,'E':EofTPreal,'D':DofTPreal}
+np.save('save_dict.npy', save_dict)
+# arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
 
 # #normailzing by one of the adiabats removes the non-linearity from the data
 # THref = arrayTHnorm[-1,:]
@@ -224,15 +263,15 @@ arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
 #plot stuve's diagram
 plt.figure(figsize=(9,6))
 plt.title('SANITY CHECK: "STUVE" PLOT')
-plt.plot(arrayTHw[-1,:]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
-plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
-# plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
-plt.plot(arrayTHw[0::10,:].T-T0,Prange, 'b')
-plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
-# plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
+plt.plot(WofTPreal[-1,:]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
+plt.plot(DofTPreal[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
+plt.plot(EofTPreal[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
+plt.plot(WofTPreal[0::10,:].T-T0,Prange, 'b')
+plt.plot(DofTPreal[0::10,:].T-T0,Prange, 'r--')
+plt.plot(EofTPreal[0::10,:].T-T0,Prange, 'g:')
 # plt.ylim([80,101])
 plt.gca().invert_yaxis()
-plt.xlim([-100,100])
+# plt.xlim([-100,100])
 plt.grid()
 plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")

@@ -3,7 +3,7 @@
 # Created by: nmoissee@eoas.ubc.ca April 2017
 #=======================================================
 #INPUT
-Tmin=-50.
+Tmin=-40.
 Tmax=40.
 # Pstep=0.0001
 Ptop = 1    #kPa - upper atmosphere limit surface
@@ -26,8 +26,8 @@ from scipy import spatial
 
 #thermodynamic constants
 Rd = 287.058    #[J K^-1 kg^-1] gas constant for dry air
-Rv = 461.5  #[J K^-1 kg^-1] gas constant for water vapour
-Cp = 1006.  #[J K^-1 kg^-1] specific heat of dry air at constant pressure
+Rv = 461.5      #[J K^-1 kg^-1] gas constant for water vapour
+Cp = 1006.      #[J K^-1 kg^-1] specific heat of dry air at constant pressure
 T0 = 273.16     #standard temperature
 P0 = 101.3      #kPa
 e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
@@ -52,6 +52,8 @@ nThetaW = np.arange(Tmin,Tmax)
 arrayTHw = np.empty((len(nThetaW),len(Prange)))     #theta moist
 arrayTHd = np.empty_like(arrayTHw)                  #theta dry
 arrayTHe = np.empty_like(arrayTHw)                  #theta equivalent (from ref pressure level)
+arrayTHe0 = np.empty_like(arrayTHw)                  #theta equivalent true
+
 
 def f_es(T):
     #saturation vapour pressure
@@ -83,15 +85,17 @@ for nT, THw in enumerate(nThetaW):
     # rs0 = f_rs(P0,es0)
     # THe0 = f_thE(T,rs0)
     #------------------------------------------------------------
+
     print('Current adiabat: %s' %THw)
     for nP,P in enumerate(Prange):
+        #update the 'constants'
         Lv = 3.139e6 - 2336 * Tz
         c2 = (Lv**2)/(Rv*Cp)    #[K^2]
         c3 = Lv/Cp      #[K]
+
         #get dry adiabat
-        arrayTHd[nT,nP] = T*((P/P0)**c1) 
-        # #qet equivalent adiabat
-        # arrayTHe[nT,nP] = THe0*((P/P0)**c1)
+        arrayTHd[nT,nP] = T*((P/P0)**c1)
+
         #get moist adiabat
         es = f_es(Tz)
         rs = f_rs(P,es)
@@ -104,15 +108,11 @@ for nT, THw in enumerate(nThetaW):
         es0 = f_es(Tz)
         rs0 = f_rs(P0,es0)
         THe0 = f_thE(Tz,rs0)
-        arrayTHe[nT,nP] = THe0
-    # THet = arrayTHe[nT,-1]
+        arrayTHe0[nT,nP] = THe0
+
     THet = Tz
     for nP,P in enumerate(Prange):
         arrayTHe[nT,nP] = THet*((P/Ptop)**c1)
-        # Tc = Tz-T0
-        # if any((nThetaW-Tc)<0.00001):
-        #     Tidx = nThetaW.tolist().index(int(Tc))
-        #     WofTPreal[Tidx,nP] = THw
 
 np.save('%s-%s.npy' %(Tmin,Tmax), arrayTHw)
 
@@ -127,6 +127,7 @@ THref = arrayTHnorm[-1,:]
 THref_fit = np.poly1d(np.polyfit(PrangeFit,THref[PrangeIdx],20))
 MAE_THref = np.mean(abs(THref[PrangeIdx]-THref_fit(PrangeFit)))
 print('MAE for polynomial fit of Tmax reference curve: %.2E' %MAE_THref)
+np.savetxt('THrefcoeffs.txt',THref_fit.coeffs)
 
 # Now model,store coeffs and plot (for specified degree polynomial)
 print('Fitting polynomials to normalized curves')
@@ -143,17 +144,22 @@ for i in range(len(nThetaW)):
 plt.show()
 plt.close()
 
+
 #now do fits for individual parameters
 print('Fitting polynomials to curve parameters')
 fitFCNs = []
+store_coeffs = []
 for iDeg in range(numterms):
     pfit = np.poly1d(np.polyfit(nThetaW,store_args[iDeg,:],25))
     MAE = np.mean(abs(store_args[iDeg,:] - pfit(nThetaW)))
     print('%s MAE = %0.2E' %(tags[iDeg],MAE))
     fitFCNs.append(pfit)
+    store_coeffs.append(pfit.coeffs)
+np.savetxt('kcoeffs.txt', store_coeffs)
+
+
 
 #create a new equation for THe of THw at surface
-from scipy.optimize import curve_fit
 def func(T, L0,L1,K):
     Tk = T + T0
     es0 = f_es(Tk)
@@ -166,6 +172,7 @@ efit = np.poly1d(np.polyfit(nThetaW,arrayTHe[:,0],3))
 mae_curve = sum(abs(arrayTHe[:,0] - func(nThetaW, *popt)))
 mae_poly = sum(abs(arrayTHe[:,0] - efit(nThetaW)))
 print mae_curve,mae_poly
+np.savetxt('THecoeffs.txt',popt)
 
 #TESTING THE METHOD======================================
 print('Evaluating polynomial fit method....')
@@ -325,7 +332,7 @@ plt.close()
 
 #plot error distribution contours in degrees
 plt.figure(figsize=(8,6))
-plt.title('ABSOLUTE ERROR (C)')
+plt.title('ERROR (C)')
 plt.imshow(arrayDiffTemp.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-0.05, vmax=0.05)
 plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")

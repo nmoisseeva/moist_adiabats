@@ -133,7 +133,7 @@ np.savetxt('THrefcoeffs.txt',THref_fit.coeffs)
 print('Fitting polynomials to normalized curves')
 numterms = degree+1
 store_args = np.zeros((numterms,len(nThetaW)))
-tags = ['k%s' %(i+1) for i in range(numterms)]
+tags = ['k%s' %i for i in range(numterms)]
 for i in range(len(nThetaW)):
     main_pfit = np.poly1d(np.polyfit(THref[PrangeIdx],arrayTHnorm[i,PrangeIdx],degree))
     store_args[:,i] = main_pfit.coeffs
@@ -158,12 +158,11 @@ for iDeg in range(numterms):
 np.savetxt('kcoeffs.txt', store_coeffs)
 
 
-
 #create a new equation for THe of THw at surface
 def func(T, L0,L1,K):
     Tk = T + T0
     es0 = f_es(Tk)
-    return Tk * np.exp((((L0 - L1*(T-T0)) + K*f_rs(P0,es0))*f_rs(P0,es0))/(Cp*Tk))
+    return Tk * np.exp((((L0 - L1*(Tk-T0)) + K*f_rs(P0,es0))*f_rs(P0,es0))/(Cp*Tk))
 popt, pcov = curve_fit(func, nThetaW, arrayTHe[:,0])
 plt.plot(nThetaW, arrayTHe[:,0],'b-')
 plt.plot(nThetaW, func(nThetaW, *popt), 'r-', label='fit')
@@ -234,9 +233,9 @@ plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature 
 plt.plot(arrayTHw[0::10,:].T-T0,Prange, 'b')
 plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
 plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
-# plt.ylim([40,101])
+plt.ylim([40,101])
 plt.gca().invert_yaxis()
-# plt.xlim([-40,40])
+plt.xlim([-40,40])
 plt.grid()
 plt.xlabel("temperature [C]")
 plt.ylabel("pressure [kPa]")
@@ -288,13 +287,13 @@ plt.suptitle('FIT PARAMETERS')
 for iDeg in range(degree):
     plt.subplot(4,4,iDeg+1)
     plt.title(tags[iDeg])
-    plt.xlabel('temperature [K]')
+    plt.xlabel('temperature [K]',fontsize=8)
     # plt.plot(xvals,store_args[iDeg,:],'g')
     # plt.plot(xvals,fitFCNs[iDeg](xvals),'r')
     plt.plot(nThetaW,store_args[iDeg,:],'g')
     plt.plot(nThetaW,fitFCNs[iDeg](nThetaW),'r')
 # plt.tight_layout()
-plt.subplots_adjust(top = .92, hspace=0.3, wspace=0.2, left=0.05, right=0.97, bottom=0.05)
+plt.subplots_adjust(top = .92, hspace=0.4, wspace=0.3, left=0.05, right=0.97, bottom=0.05)
 plt.savefig('./figs/fit_params.pdf')
 plt.show()
 plt.close()
@@ -346,27 +345,27 @@ plt.savefig('./figs/DiffContoursTemp.pdf')
 plt.show()
 plt.close()
 
-#plot stuve's diagram with modelled adiabats
-plt.figure(figsize=(9,6))
-plt.title('TESTING')
-plt.plot(arrayTHw[-1,:]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
-plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
-plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
-plt.plot(arrayTHwm[-1,:]-T0,PrangeFit, 'y',label='modelled moist adiabat $\\theta_{mod}$')
-plt.plot(arrayTHw[0::5,:].T-T0,Prange, 'b')
-plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
-plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
-plt.plot(arrayTHwm[0::5,:].T-T0,PrangeFit, 'y')
-plt.ylim([40,101])
-plt.gca().invert_yaxis()
-plt.xlim([-40,40])
-plt.grid()
-plt.xlabel("temperature [C]")
-plt.ylabel("pressure [kPa]")
-plt.legend(loc='upper right',fontsize=12)
-# plt.savefig('./figs/stuve.pdf')
-plt.show()
-plt.close()
+# #plot stuve's diagram with modelled adiabats
+# plt.figure(figsize=(9,6))
+# plt.title('TESTING')
+# plt.plot(arrayTHw[-1,:]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
+# plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
+# plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
+# plt.plot(arrayTHwm[-1,:]-T0,PrangeFit, 'y',label='modelled moist adiabat $\\theta_{mod}$')
+# plt.plot(arrayTHw[0::5,:].T-T0,Prange, 'b')
+# plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
+# plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
+# plt.plot(arrayTHwm[0::5,:].T-T0,PrangeFit, 'y')
+# plt.ylim([40,101])
+# plt.gca().invert_yaxis()
+# plt.xlim([-40,40])
+# plt.grid()
+# plt.xlabel("temperature [C]")
+# plt.ylabel("pressure [kPa]")
+# plt.legend(loc='upper right',fontsize=12)
+# # plt.savefig('./figs/stuve.pdf')
+# plt.show()
+# plt.close()
 
 
 

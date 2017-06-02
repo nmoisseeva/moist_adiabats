@@ -12,19 +12,20 @@ Ptop = 1    #kPa - upper atmosphere limit surface (from Part 1)
 degree =10      #degree of polinomial to model the curves
 #=======================================================
 
-#supress warnings
-import warnings
-def fxn():
-    warnings.warn("deprecated", DeprecationWarning)
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore")
-    fxn()
+# #supress warnings
+# import warnings
+# def fxn():
+#     warnings.warn("deprecated", DeprecationWarning)
+# with warnings.catch_warnings():
+#     warnings.simplefilter("ignore")
+#     fxn()
 
 #import necessary packages 
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit, minimize
 from scipy import spatial
+from scipy.interpolate import griddata
 
 #constants
 T0 = 273.16     #standard temperature
@@ -39,7 +40,7 @@ segments = [10,2,Ptop]
 segIdx = [np.argmin(abs(PrangeList - i)) for i in segments]
 # PrangeIdx = np.concatenate((np.arange(P0,segIdx[0],1,dtype=int),np.arange(segIdx[0],segIdx[1],1000,dtype=int),np.arange(segIdx[1],segIdx[2],100,dtype=int)))
 
-PrangeIdx = np.concatenate((np.arange(P0,segIdx[0],1000,dtype=int),np.arange(segIdx[0],segIdx[1],10000,dtype=int)))
+PrangeIdx = np.concatenate((np.arange(0,segIdx[0],1000,dtype=int),np.arange(segIdx[0],segIdx[1],10000,dtype=int)))
 PrangeFit = Prange[PrangeIdx]
 
 # PrangeIdx = np.arange(0,1413000,10)
@@ -54,11 +55,16 @@ nTw = np.arange(Tmin,Tmax,0.5)
 nTwk = [i + T0 for i in nTw]
 
 cs = plt.contour(nThetaW,PrangeFit,arrayTHw[:,PrangeIdx].T,nTwk)
+# ax = plt.gca()
+# ax.set_yticks(np.arange(0,len(PrangeFit),100))
+# ax.set_yticklabels(PrangeFit[::100])
+
 
 plt.gca().invert_yaxis()
 plt.show()
 
 arrayTw = []
+arrayTax = []
 arrayP = []
 for nT, T in enumerate(nTwk):
     cs_paths = cs.collections[nT].get_paths()
@@ -66,6 +72,7 @@ for nT, T in enumerate(nTwk):
         path_vals =cs_paths[0]
         vtx = path_vals.vertices
         tnorm = (vtx[:,0] - nTw[nT])
+        arrayTax.append(vtx[:,0])
         arrayTw.append(tnorm)
         arrayP.append(vtx[:,1])
 
@@ -114,7 +121,7 @@ print('Fitting polynomials to curve parameters')
 fitFCNs = []
 store_coeffs = []
 for iDeg in range(numterms):
-    pfit = np.poly1d(np.polyfit(nTwk,store_args[iDeg,:],20))
+    pfit = np.poly1d(np.polyfit(nTwk,store_args[iDeg,:],25))
     MAE = np.mean(abs(store_args[iDeg,:] - pfit(nTwk[:])))
     print('%s MAE = %0.2E' %(tags[iDeg],MAE))
     fitFCNs.append(pfit)
@@ -145,7 +152,7 @@ for nT, T in enumerate(nTwk):
         k.append(fitFCNs[iDeg](T))
     #fit the moist adiabats
     storeFit = []
-    for nP,P in enumerate(arrayP[nT][::10]):
+    for nP,P in enumerate(arrayP[nT]):
         #sum up the polynomial terms
         THfit = 0.
         for iDeg in range(numterms):
@@ -156,29 +163,51 @@ for nT, T in enumerate(nTwk):
 
 arrayDiff = []
 for nT, T in enumerate(nTwk):
-    diff = arrayTw[nT][::10] - arrayTHfit[nT]
+    diff = arrayTw[nT] - arrayTHfit[nT]
     arrayDiff.append(diff)
     plt.plot(arrayTw[nT],arrayP[nT],'b')
-    plt.plot(arrayTHfit[nT],arrayP[nT][::10],'r' )
+    plt.plot(arrayTHfit[nT],arrayP[nT],'r' )
 plt.gca().invert_yaxis()
 plt.show()
 plt.close()
 
 
-maxLen = len(sorted(arrayDiff,key=len, reverse=True)[0])
-error2D = np.zeros((len(arrayDiff),maxLen))*np.nan
-for nT, T in enumerate(nTwk):
-    vals = arrayDiff[nT]
-    error2D[nT,:len(vals)] = vals
+# grid_x, grid_y = np.mgrid[-40:Tmax:0.5,P0:2:-0.01]
+grid_x, grid_y = np.mgrid[-40:Tmax:0.05,P0:2:-0.05]
+
+
+flatten = lambda l: [item for sublist in l for item in sublist]
+
+# maxLen = len(sorted(arrayDiff,key=len, reverse=True)[0])
+# error2D = np.zeros((len(arrayDiff),maxLen))*np.nan
+# p = np.zeros((len(arrayDiff),maxLen))*np.nan
+
+# for nT, T in enumerate(nTwk):
+#     vals = arrayDiff[nT][::-1]
+#     p[nT,:len(vals)] = arrayP[nT][::-1]
+#     error2D[nT,:len(vals)] = vals
+
+flatTH, flatP, flatError = np.array(flatten(arrayTax)),np.array(flatten(arrayP)), np.array(flatten(arrayDiff))
+
+gridError = griddata(zip(flatTH,flatP),flatError,(grid_x, grid_y), method='cubic')
+
+plt.figure(figsize=(8,6))
+# plt.title('ABSOLUTE ERROR (C)')
+
+plt.imshow(gridError.T,aspect='auto',origin='lower',vmin=-0.05, vmax=0.05,cmap='RdBu_r')
+# plt.gca().invert_yaxis()
+plt.colorbar()
+plt.show()
+plt.close()
 
 
 plt.figure(figsize=(8,6))
 plt.title('ABSOLUTE ERROR (C)')
 # for nT,T in enumerate(nTwk):
 #     plt.scatter(arrayTw[nT][::10]+nTw[nT],arrayP[nT][::10],s=1,c=arrayDiff[nT],vmin=-0.05,vmax=0.05, cmap='RdBu_r')
-plt.contourf(error2D.T,cmap='RdBu_r',vmin=-0.05, vmax=0.05)
+# plt.contourf(error2D,cmap='RdBu_r',vmin=-0.05, vmax=0.05)
 
-# plt.imshow(error2D,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-0.05, vmax=0.05)
+plt.imshow(error2D.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-0.05, vmax=0.05)
 # plt.gca().invert_yaxis()
 # plt.xlim([-40,40])
 plt.colorbar()

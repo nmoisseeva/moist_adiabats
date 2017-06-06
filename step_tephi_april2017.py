@@ -222,6 +222,8 @@ for nT, THw in enumerate(nThetaW):
 
 
 arrayDiffTemp = arrayTHw[:,PrangeIdx]-arrayTHwm
+MAE = np.mean(abs(arrayDiffTemp.ravel()))
+print('FULL DOMAIN MAE: %s' %MAE) 
 
 #=====================PLOTTING===========================
 #plot stuve's diagram
@@ -269,17 +271,17 @@ plt.savefig('./figs/THref.pdf')
 plt.show()
 plt.close()
 
-# #plot transformed adiabats
-# plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{trans}$')
-# plt.plot(THref,arrayTHnorm[0:int(Tmax),:].T,'b')
-# plt.plot(THref,arrayTHnorm[int(Tmax):,:].T,'r')
-# plt.xlim([0,1.1])
-# plt.xlabel('reference saturated adiabat')
-# plt.ylim([0,1.1])
-# plt.ylabel('transformated saturated adiabats')
-# plt.savefig('./figs/THtrans.pdf')
-# plt.show()
-# plt.close()
+#plot transformed adiabats
+plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{trans}$')
+plt.plot(THref,arrayTHnorm[0:int(Tmax),:].T,'b')
+plt.plot(THref,arrayTHnorm[int(Tmax):,:].T,'r')
+plt.xlim([0,1.1])
+plt.xlabel('reference saturated adiabat')
+plt.ylim([0,1.1])
+plt.ylabel('transformated saturated adiabats')
+plt.savefig('./figs/THtrans.pdf')
+plt.show()
+plt.close()
 
 #subplot of fits for individual parameters
 fig = plt.figure(figsize=(10, 10)) 
@@ -341,7 +343,7 @@ ax.set_yticks(np.arange(13,len(PrangeFit),200))
 ax.set_xticklabels(nThetaW[::10])
 ax.set_yticklabels(np.arange(100,1,-20))
 plt.colorbar()
-plt.savefig('./figs/DiffContoursTemp.pdf')
+plt.savefig('./figs/ErrorTHw.pdf')
 plt.show()
 plt.close()
 

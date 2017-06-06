@@ -125,15 +125,18 @@ for nT, T in enumerate(nTwk):
     arrayTHfit.append(storeFit)
 
 arrayDiff = []
+MAE = []
 for nT, T in enumerate(nTwk):
     diff = arrayTw[nT] - arrayTHfit[nT]
     arrayDiff.append(diff)
     plt.plot(arrayTw[nT],arrayP[nT],'b')
     plt.plot(arrayTHfit[nT],arrayP[nT],'r' )
+    MAE.extend(abs(diff))
 plt.gca().invert_yaxis()
 plt.show()
 plt.close()
-
+MAE = np.mean(MAE)
+print('FULL DOMAIN MAE: %s' %MAE) 
 
 #regrid error to rectilinear for plotting
 Taxis, Paxis = np.arange(-40,Tmax,1), np.arange(P0,2,-0.1)
@@ -184,6 +187,6 @@ cbar = plt.colorbar()
 cbar.set_label('temperature difference [C]')
 plt.xlabel('$\\Theta_w$ [C]')
 plt.ylabel('pressure [kPa]')
-plt.savefig('./figs/ErrorTHw.pdf')
+plt.savefig('./figs/ErrorT.pdf')
 plt.show()
 plt.close()

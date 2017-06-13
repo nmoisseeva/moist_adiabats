@@ -6,6 +6,7 @@
 Tmin=-40.
 Tmax=40.
 # Pstep=0.0001
+Pbot = 105
 Ptop = 1    #kPa - upper atmosphere limit surface
 degree =10      #degree of polinomial to model the curves
 
@@ -29,7 +30,7 @@ Rd = 287.058    #[J K^-1 kg^-1] gas constant for dry air
 Rv = 461.5      #[J K^-1 kg^-1] gas constant for water vapour
 Cp = 1006.      #[J K^-1 kg^-1] specific heat of dry air at constant pressure
 T0 = 273.16     #standard temperature
-P0 = 101.3      #kPa
+P0 = 100.      #kPa
 e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
 
 #derived constants
@@ -38,7 +39,8 @@ c1 = Rd/Cp      #dimensionless
 
 
 #create temp and pressure axes
-Pbrange = np.arange(P0,10,-0.0001)
+# Pbrange = np.arange(P0,10,-0.0001)
+Pbrange = np.arange(Pbot,10,-0.0001)
 Pmrange = np.arange(10,2,-0.00001)
 Ptrange = np.arange(2,Ptop,-0.000001)
 
@@ -119,7 +121,8 @@ np.save('%s-%s.npy' %(Tmin,Tmax), arrayTHw)
 arrayTHnorm = (arrayTHw - arrayTHd)/(arrayTHe - arrayTHd)
 
 #monotonically select points every 0.1 kPa for fitting
-PrangeIdx = [np.argmin(abs(PrangeList - i)) for i in np.arange(P0,1,-0.1)]
+# PrangeIdx = [np.argmin(abs(PrangeList - i)) for i in np.arange(P0,1,-0.1)]
+PrangeIdx = [np.argmin(abs(PrangeList - i)) for i in np.arange(Pbot,1,-0.1)]
 PrangeFit = Prange[PrangeIdx]
 
 #normailzing by one of the adiabats removes the non-linearity from the data
@@ -342,7 +345,8 @@ ax.set_xticks(np.arange(0,len(nThetaW),10))
 ax.set_yticks(np.arange(13,len(PrangeFit),200))
 ax.set_xticklabels(nThetaW[::10])
 ax.set_yticklabels(np.arange(100,1,-20))
-plt.colorbar()
+cbar = plt.colorbar()
+cbar.set_label('temperature difference [C]')
 plt.savefig('./figs/ErrorTHw.pdf')
 plt.show()
 plt.close()

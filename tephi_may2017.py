@@ -5,8 +5,8 @@
 #INPUT
 Tmin=-100.
 Tmax=100.
-THmin =-60.
-THmax= 40.
+THmin =-68.
+THmax= 42.
 Pbot = 105
 Ptop = 1    #kPa - upper atmosphere limit surface
 Plim = 1
@@ -93,7 +93,7 @@ else:
 #monotonically select points every 0.1 kPa for fitting
 PrangeIdx = [np.argmin(abs(PrangeList - i)) for i in np.arange(Pbot,Plim,-0.1)]
 PrangeFit = Prange[PrangeIdx]
-P0idx = np.argmin(abs(PrangeFit - P0))
+P0idx = np.argmin(abs(Prange - P0))
 Tidx = [np.argmin(abs(nTw - i)) for i in nThetaW]
 
 
@@ -103,17 +103,7 @@ subarrayTHw = arrayTHw[Tidx,:]
 P0axis = subarrayTHw[:,P0idx]
 C0axis = P0axis - T0
 
-# Top_fit = np.poly1d(np.polyfit(C0axis,subarrayTHw[:,-1],20))
-# MAE_Top = np.mean(abs(subarrayTHw[:,-1]-Top_fit(C0axis)))
-# print('MAE for polynomial fit of Tmax reference curve: %.2E' %MAE_Top)
-
-for nT, THw in enumerate(nThetaW):
-    # Tbot = THw + T0
-    # Tbot = P0axis[nT]
-    # Ttop = Top_fit(Tbot-T0)
-    # arrayTHnorm[nT,:] = (subarrayTHw[nT,PrangeIdx] - Ttop)/Ttop
-    # arrayTHnorm[nT,:] = (subarrayTHw[nT,PrangeIdx]-Tbot)/(Ttop - Tbot)
-    arrayTHnorm[nT,:] = subarrayTHw[nT,PrangeIdx]
+arrayTHnorm[:,:] = subarrayTHw[:,PrangeIdx]     #redundant, fix above
 
 
 #normailzing by one of the adiabats removes the non-linearity from the data
@@ -121,8 +111,8 @@ THref = arrayTHnorm[0,:]
 THref_fit = np.poly1d(np.polyfit(PrangeFit,THref,20))
 MAE_THref = np.mean(abs(THref-THref_fit(PrangeFit)))
 print('MAE for polynomial fit of Tmax reference curve: %.2E' %MAE_THref)
-# np.savetxt('THrefcoeffs.txt',THref_fit.coeffs)
-
+np.savetxt('THrefcoeffs.txt',THref_fit.coeffs)
+np.savetxt('THrefcoeffs_latex.txt', THref_fit.coeffs.T, delimiter=' & ', fmt='%2.2e')
 
 # for n in range(30): 
 #     #normailzing by one of the adiabats removes the non-linearity from the data
@@ -136,16 +126,13 @@ print('Fitting polynomials to normalized curves')
 numterms = degree+1
 store_args = np.zeros((numterms,len(nThetaW)))
 tags = ['k%s' %i for i in range(numterms)]
-for i in range(len(nThetaW)):
-    main_pfit = np.poly1d(np.polyfit(THref,arrayTHnorm[i,:],degree))
+for i in range(len(P0axis)):
+    main_pfit = np.poly1d(np.polyfit(THref_fit(PrangeFit),arrayTHnorm[i,:],degree))
     store_args[:,i] = main_pfit.coeffs
-    plt.plot(THref,main_pfit(THref),'r')
-    plt.plot(THref,arrayTHnorm[i,:],'b')
-    # plt.xlim([0,1])
-    # plt.ylim([0,1])
+    plt.plot(THref_fit(PrangeFit),main_pfit(THref_fit(PrangeFit)),'r')
+    plt.plot(THref_fit(PrangeFit),arrayTHnorm[i,:],'b')
 plt.show()
 plt.close()
-
 
 
 #now do fits for individual parameters
@@ -153,19 +140,20 @@ print('Fitting polynomials to curve parameters')
 fitFCNs = []
 store_coeffs = []
 for iDeg in range(numterms):
-    pfit = np.poly1d(np.polyfit(C0axis,store_args[iDeg,:],30))
+    pfit = np.poly1d(np.polyfit(C0axis,store_args[iDeg,:],20))
     MAE = np.mean(abs(store_args[iDeg,:] - pfit(C0axis)))
     print('%s MAE = %0.2E' %(tags[iDeg],MAE))
     fitFCNs.append(pfit)
     store_coeffs.append(pfit.coeffs)
-# np.savetxt('kcoeffs.txt', store_coeffs)
+np.savetxt('kcoeffs.txt', store_coeffs)
+np.savetxt("kcoeffs_latex.txt", store_coeffs, delimiter=' & ', fmt='%2.2e', newline=' \\\\\n')
+
 
 #TESTING THE METHOD======================================
 print('Evaluating polynomial fit method....')
-arrayTHfit = np.zeros((len(nThetaW),len(PrangeFit)))
+arrayTHfit = np.zeros((len(C0axis),len(PrangeFit)))
 
 for nT, T in enumerate(C0axis):
-    print('.....current adiabat: %s' %T)
     k = []
     #calculate parameters 
     for iDeg in range(numterms):
@@ -199,36 +187,36 @@ print('FULL DOMAIN MAE: %s' %MAE)
 #=====================PLOTTING===========================
 
 PaxisIdx = [np.argmin(abs(PrangeFit - i)) for i in np.arange(P0,Plim,-10)]
-
-# #plot stuve's diagram
-# plt.figure(figsize=(9,6))
-# plt.title('SANITY CHECK: "STUVE" PLOT')
-# plt.plot(arrayTHw[-1,:]-T0,Prange, 'b',label='moist adiabat $\\theta_w$')
-# # plt.plot(arrayTHd[-1,:]-T0,Prange, 'r--',label='dry adiabat $\\theta_d$')
-# # plt.plot(arrayTHe[-1,:]-T0,Prange, 'g:',label='equivalent potential temperature $\\theta_e}$')
-# plt.plot(arrayTHw[0::10,:].T-T0,Prange, 'b')
-# # plt.plot(arrayTHd[0::10,:].T-T0,Prange, 'r--')
-# # plt.plot(arrayTHe[0::10,:].T-T0,Prange, 'g:')
-# plt.ylim([40,101])
-# plt.gca().invert_yaxis()
-# plt.xlim([-40,40])
-# plt.grid()
-# plt.xlabel("temperature [C]")
-# plt.ylabel("pressure [kPa]")
-# plt.legend(loc='upper right',fontsize=12)
-# # plt.savefig('./figs/stuve.pdf')
-# plt.show()
-# # plt.close()
+#plot emegram diagram
+plt.figure(figsize=(9,6))
+plt.title('EMAGRAM')
+plt.semilogy(subarrayTHw[0::10,:].T-T0,Prange, 'k')
+plt.semilogy(subarrayTHw[-1,:]-T0,Prange, 'k',label='"true" $\\theta_w$')
+plt.semilogy(arrayTHfit[0::10,:].T-T0,PrangeFit, 'r--')
+plt.semilogy(arrayTHfit[-1,:]-T0,PrangeFit, 'r--',label='modelled $\\theta_w$')
+plt.ylim([10,105])
+plt.xlim([-100,40])
+plt.grid()
+plt.xlabel("temperature [$^\circ$C]")
+plt.ylabel("pressure [kPa]")
+ax = plt.gca()
+# ax.set_yticks(PaxisIdx)
+# ax.set_yticklabels(PrangeFit[PaxisIdx].round())
+ax.invert_yaxis()
+plt.legend(loc='upper right',fontsize=12)
+plt.savefig('./figs/emagram.pdf')
+plt.show()
+plt.close()
 
 #plot fit of single adiabat THref
-plt.title('$\\theta_{ref} = \\theta_{-60}$ POLYNOMIAL FIT')
+plt.title('$\\theta_{ref} = \\theta_{-70}$ POLYNOMIAL FIT')
 plt.plot(THref,PrangeFit,'g')
 plt.plot(THref_fit(PrangeFit),PrangeFit,'r')
 ax = plt.gca()
 plt.gca().invert_yaxis()
 plt.xlabel('temperature [K]')
 plt.ylabel('pressure [kPa]')
-# plt.savefig('./figs/THref_May.pdf')
+plt.savefig('./figs/THref_May.pdf')
 plt.show()
 plt.close()
 
@@ -243,21 +231,24 @@ plt.close()
 # plt.close()
 
 #subplot of fits for individual parameters
-fig = plt.figure(figsize=(10, 10)) 
+fig = plt.figure(figsize=(12, 10)) 
 plt.suptitle('FIT PARAMETERS')
 import matplotlib.ticker as mtick
-for iDeg in range(degree):
-    plt.subplot(4,4,iDeg+1)
+for iDeg in range(degree+1):
+    plt.subplot(3,4,iDeg+1)
     plt.title(tags[iDeg])
-    plt.xlabel('temperature [K]',fontsize=8)
-    plt.plot(nThetaW,store_args[iDeg,:],'g')
-    plt.plot(nThetaW,fitFCNs[iDeg](C0axis),'r')
+    plt.xlabel('temperature [$^\circ$C]',fontsize=8)
+    plt.plot(C0axis,store_args[iDeg,:],'g')
+    plt.plot(C0axis,fitFCNs[iDeg](C0axis),'r')
     plt.gca().tick_params(labelsize=6)
 # plt.tight_layout()
 plt.subplots_adjust(top = .92, hspace=0.4, wspace=0.3, left=0.05, right=0.97, bottom=0.05)
 plt.savefig('./figs/fit_params_May.pdf')
 plt.show()
 plt.close()
+
+
+
 
 # #plot true and fitted normalized saturated adiabats
 # plt.figure(figsize=(8,6))
@@ -278,16 +269,16 @@ plt.close()
 plt.figure(figsize=(8,6))
 plt.title('ERROR CONTOURS')
 plt.imshow(arrayDiff.T,aspect='auto',origin='lower',cmap='RdBu_r',vmin=-0.1,vmax=0.1)
-plt.xlabel("temperature [C]")
+plt.xlabel("temperature [$^\circ$C]")
 plt.ylabel("pressure [kPa]")
 ax = plt.gca()
 ax.set_xticks(np.arange(0,len(nThetaW),20))
-ax.set_xticklabels(nThetaW[::20].astype(int))
+ax.set_xticklabels(C0axis[::20].astype(int))
 ax.set_yticks(PaxisIdx)
-ax.set_yticklabels(PrangeFit[PaxisIdx].astype(int))
+ax.set_yticklabels(PrangeFit[PaxisIdx].round())
 cbar = plt.colorbar(format='%.2f')
 cbar.set_label('temperature difference [K]')
-plt.savefig('./figs/DiffContours_May.pdf')
+plt.savefig('./figs/ErrorTHw_May.pdf')
 plt.show()
 plt.close()
 

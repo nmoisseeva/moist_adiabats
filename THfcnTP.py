@@ -5,11 +5,13 @@
 #INPUT
 Tmin =-100
 Tmax =40
-THmin =-100    
-THmax = 100
-
-Ptop = 1    #kPa - upper atmosphere limit surface (from Part 1)
+THmin =-100.    
+THmax = 100.
+Pbot = 105
+Ptop = 1    #kPa - upper atmosphere limit surface
+Plim = 1
 degree =10      #degree of polinomial to model the curves
+datafile = '%s-%s.npy' %(THmin,THmax)
 #=======================================================
 
 # #supress warnings
@@ -29,25 +31,28 @@ from scipy.interpolate import griddata
 
 #constants
 T0 = 273.16     #standard temperature
-P0 = 101.3      #kPa
+P0 = 100.      #kPa
 
 #create temp and pressure axes (from Part 1) - DO NOT CHANGE UNLESS PART 1 IS RECALCULATED
-PrangeList = np.concatenate((np.arange(P0,10,-0.0001),np.arange(10,2,-0.00001),np.arange(2,Ptop,-0.000001)))
+PrangeList = np.concatenate((np.arange(Pbot,10,-0.0001),np.arange(10,2,-0.00001),np.arange(2,Ptop,-0.000001)))
 Prange = PrangeList[:-1]
-
-#create a custom pressure range to aid fitting - DO NOT CHANGE UNLESS PART 1 IS RECALCULATED
-segments = [10,2,Ptop]  
-segIdx = [np.argmin(abs(PrangeList - i)) for i in segments]
-PrangeIdx = np.concatenate((np.arange(0,segIdx[0],1000,dtype=int),np.arange(segIdx[0],segIdx[1],10000,dtype=int)))
-PrangeFit = Prange[PrangeIdx]
-
-#load pre-calculated THw
-arrayTHw = np.load('%s.0-%s.0.npy' %(THmin,THmax))
-nThetaW = np.arange(THmin,THmax)
 
 #set up temperature ranges
 nTw = np.arange(Tmin,Tmax,0.5)
 nTwk = [i + T0 for i in nTw]
+
+#load pre-calculated THw
+arrayTHw = np.load(datafile)
+nThetaW = np.arange(THmin,THmax,0.5)
+
+#create a custom pressure range to aid fitting - DO NOT CHANGE UNLESS PART 1 IS RECALCULATED
+segments = [10,2,Plim]  
+segIdx = [np.argmin(abs(PrangeList - i)) for i in segments]
+PrangeIdx = np.concatenate((np.arange(0,segIdx[0],1000,dtype=int),np.arange(segIdx[0],segIdx[1],10000,dtype=int)))
+PrangeFit = Prange[PrangeIdx]
+
+
+
 
 #extract contours of constant temperature, plot
 cs = plt.contour(nThetaW,PrangeFit,arrayTHw[:,PrangeIdx].T,nTwk)
@@ -63,10 +68,21 @@ for nT, T in enumerate(nTwk):
     if len(cs_paths) > 0:
         path_vals =cs_paths[0]
         vtx = path_vals.vertices
-        tnorm = (vtx[:,0] - nTw[nT])
+        tnorm = vtx[:,0]
+
+        # tnorm = (vtx[:,0] - nTw[nT])
         arrayTax.append(vtx[:,0])
         arrayTw.append(tnorm)
         arrayP.append(vtx[:,1])
+
+C0axis = []
+for nT, T in enumerate(nTwk):
+    P0idx = np.argmin(abs(np.array(arrayP[nT][:]) - P0))
+    C0axis.append(arrayTw[nT][P0idx])
+# P0idx = np.argmin(abs(PrangeFit - P0))
+# Tidx = [np.argmin(abs(nTw - i)) for i in nTw]
+# P0axis = arrayTHw[Tidx,P0idx]
+# C0axis = P0axis - T0
 
 
 #normailzing by one of the curves removes the non-linearity from the data
@@ -77,6 +93,8 @@ Tref_fit = np.poly1d(np.polyfit(Pref,Tref,20))
 MAE_Tref = np.mean(abs(Tref-Tref_fit(Pref)))
 print('MAE for polynomial fit of Trefcurve: %.2E' %MAE_Tref)
 np.savetxt('Trefcoeffs.txt',Tref_fit.coeffs)
+np.savetxt("Trefcoeffs_latex.txt", Tref_fit.coeffs, delimiter=' & ', fmt='%2.2e')
+
 
 
 # Now model,store coeffs and plot (for specified degree polynomial)
@@ -98,17 +116,18 @@ print('Fitting polynomials to curve parameters')
 fitFCNs = []
 store_coeffs = []
 for iDeg in range(numterms):
-    pfit = np.poly1d(np.polyfit(nTwk,store_args[iDeg,:],20))
-    MAE = np.mean(abs(store_args[iDeg,:] - pfit(nTwk[:])))
+    pfit = np.poly1d(np.polyfit(C0axis,store_args[iDeg,:],20))
+    MAE = np.mean(abs(store_args[iDeg,:] - pfit(C0axis)))
     print('%s MAE = %0.2E' %(tags[iDeg],MAE))
     fitFCNs.append(pfit)
     store_coeffs.append(pfit.coeffs)
 np.savetxt('kcoeffsT.txt', store_coeffs)
+np.savetxt("kcoeffsT_latex.txt", store_coeffs, delimiter=' & ', fmt='%2.2e', newline=' \\\\\n')
 
 
 #TESTING THE METHOD======================================
 arrayTHfit = []
-for nT, T in enumerate(nTwk):
+for nT, T in enumerate(C0axis):
     k = []
     #calculate parameters 
     for iDeg in range(numterms):
@@ -139,7 +158,7 @@ MAE = np.mean(MAE)
 print('FULL DOMAIN MAE: %s' %MAE) 
 
 #regrid error to rectilinear for plotting
-Taxis, Paxis = np.arange(-40,Tmax,1), np.arange(P0,2,-0.1)
+Taxis, Paxis = np.arange(Tmin,Tmax,0.5), np.arange(Pbot,Plim,-0.1)
 Pidx = [np.argmin(abs(Paxis - i)) for i in np.arange(100,1,-10)]
 grid_x, grid_y = np.meshgrid(Taxis,Paxis)
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -154,39 +173,40 @@ plt.plot(Tref_fit(Pref),Pref,'r')
 plt.gca().invert_yaxis()
 plt.xlabel('normalized temperature')
 plt.ylabel('pressure [kPa]')
-plt.savefig('./figs/Tref.pdf')
+plt.savefig('./figs/Tref_May.pdf')
 plt.show()
 plt.close()
 
 
 #subplot of fits for individual parameters
-fig = plt.figure(figsize=(10, 12)) 
+fig = plt.figure(figsize=(12, 10)) 
 plt.suptitle('FIT PARAMETERS')
-for iDeg in range(degree):
-    plt.subplot(4,4,iDeg+1)
+for iDeg in range(degree+1):
+    plt.subplot(3,4,iDeg+1)
     plt.title(tags[iDeg])
     plt.xlabel('temperature [K]',fontsize=8)
     plt.plot(nTwk,store_args[iDeg,:],'g')
-    plt.plot(nTwk,fitFCNs[iDeg](nTwk),'r')
+    plt.plot(nTwk,fitFCNs[iDeg](C0axis),'r')
+    plt.gca().tick_params(labelsize=6)
 plt.subplots_adjust(top = .92, hspace=0.4, wspace=0.4, left=0.05, right=0.97, bottom=0.05)
-plt.savefig('./figs/fit_params_T.pdf')
+plt.savefig('./figs/fit_params_T_May.pdf')
 plt.show()
 plt.close()
 
 
 plt.figure(figsize=(8,6))
-plt.title('ERROR (°C)')
-plt.imshow(gridError,aspect='auto',origin='lower',vmin=-0.05, vmax=0.05,cmap='RdBu_r')
+plt.title('ERROR CONTOURS')
+plt.imshow(gridError,aspect='auto',origin='lower',vmin=-0.01, vmax=0.01,cmap='RdBu_r')
 # plt.contourf(grid_x,grid_y,gridError,vmin=-0.05, vmax=0.05,cmap='RdBu_r')
 ax = plt.gca()
 ax.set_xticks(np.arange(0,len(Taxis),len(Taxis)/8))
 ax.set_yticks(Pidx)
 ax.set_xticklabels(Taxis[::len(Taxis)/8].astype(int))
 ax.set_yticklabels(np.arange(100,1,-10, dtype=int))
-cbar = plt.colorbar()
-cbar.set_label('temperature difference [°C]')
-plt.xlabel('$\\Theta_w$ [°C]')
+cbar = plt.colorbar(format='%.3f')
+cbar.set_label('temperature difference [K]')
+plt.xlabel('$\\Theta_w$ [$^\circ$C]')
 plt.ylabel('pressure [kPa]')
-plt.savefig('./figs/ErrorT.pdf')
+plt.savefig('./figs/ErrorT_May.pdf')
 plt.show()
 plt.close()

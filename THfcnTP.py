@@ -101,7 +101,7 @@ np.savetxt("Trefcoeffs_latex.txt", Tref_fit.coeffs, delimiter=' & ', fmt='%2.2e'
 print('Fitting polynomials to normalized curves')
 numterms = degree+1
 store_args = np.zeros((numterms,len(nTwk)))
-tags = ['k%s' %i for i in range(numterms)]
+tags = ['$\\kappa_{%s}$' %i for i in range(numterms)]
 for nT in range(len(nTwk)):
     main_pfit = np.poly1d(np.polyfit(Tref_fit(arrayP[nT]),arrayTw[nT],degree))
     store_args[:,nT] = main_pfit.coeffs
@@ -167,11 +167,11 @@ gridError = griddata(zip(flatTH,flatP),flatError,(grid_x, grid_y), method='cubic
 
 #=====================PLOTTING===========================
 #plot fit of single curve Tref
-plt.title('$T_{ref}$ POLYNOMIAL FIT')
+# plt.title('$T_{ref}$ POLYNOMIAL FIT')
 plt.plot(Tref,Pref,'g')
 plt.plot(Tref_fit(Pref),Pref,'r')
 plt.gca().invert_yaxis()
-plt.xlabel('normalized temperature')
+plt.xlabel('$\\theta_w$ [$^\\circ$C]')
 plt.ylabel('pressure [kPa]')
 plt.savefig('./figs/Tref_May.pdf')
 plt.show()
@@ -180,14 +180,14 @@ plt.close()
 
 #subplot of fits for individual parameters
 fig = plt.figure(figsize=(12, 10)) 
-plt.suptitle('FIT PARAMETERS')
+# plt.suptitle('FIT PARAMETERS')
 for iDeg in range(degree+1):
     plt.subplot(3,4,iDeg+1)
     plt.title(tags[iDeg])
-    plt.xlabel('temperature [K]',fontsize=8)
-    plt.plot(nTwk,store_args[iDeg,:],'g')
-    plt.plot(nTwk,fitFCNs[iDeg](C0axis),'r')
-    plt.gca().tick_params(labelsize=6)
+    plt.xlabel('T [$^\\circ$C]',fontsize=8)
+    plt.plot(C0axis,store_args[iDeg,:],'g')
+    plt.plot(C0axis,fitFCNs[iDeg](C0axis),'r')
+    plt.gca().tick_params(labelsize=8.5)
 plt.subplots_adjust(top = .92, hspace=0.4, wspace=0.4, left=0.05, right=0.97, bottom=0.05)
 plt.savefig('./figs/fit_params_T_May.pdf')
 plt.show()
@@ -195,17 +195,17 @@ plt.close()
 
 
 plt.figure(figsize=(8,6))
-plt.title('ERROR CONTOURS')
+# plt.title('ERROR CONTOURS')
 plt.imshow(gridError,aspect='auto',origin='lower',vmin=-0.01, vmax=0.01,cmap='RdBu_r')
 # plt.contourf(grid_x,grid_y,gridError,vmin=-0.05, vmax=0.05,cmap='RdBu_r')
 ax = plt.gca()
-ax.set_xticks(np.arange(0,len(Taxis),len(Taxis)/8))
+ax.set_xticks(np.arange(0,len(Taxis),len(Taxis)/7))
 ax.set_yticks(Pidx)
-ax.set_xticklabels(Taxis[::len(Taxis)/8].astype(int))
+ax.set_xticklabels(Taxis[::len(Taxis)/7].astype(int))
 ax.set_yticklabels(np.arange(100,1,-10, dtype=int))
 cbar = plt.colorbar(format='%.3f')
 cbar.set_label('temperature difference [K]')
-plt.xlabel('$\\Theta_w$ [$^\circ$C]')
+plt.xlabel('$\\theta_w$ [$^\circ$C]')
 plt.ylabel('pressure [kPa]')
 plt.savefig('./figs/ErrorT_May.pdf')
 plt.show()

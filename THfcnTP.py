@@ -11,7 +11,7 @@ Pbot = 105
 Ptop = 1    #kPa - upper atmosphere limit surface
 Plim = 1
 degree =10      #degree of polinomial to model the curves
-datafile = '%s-%s.npy' %(THmin,THmax)
+datafile = '%s-%s_T.npy' %(THmin,THmax)
 #=======================================================
 
 # #supress warnings
@@ -30,7 +30,7 @@ from scipy import spatial
 from scipy.interpolate import griddata
 
 #constants
-T0 = 273.16     #standard temperature
+T0 = 273.15     #standard temperature
 P0 = 100.      #kPa
 
 #create temp and pressure axes (from Part 1) - DO NOT CHANGE UNLESS PART 1 IS RECALCULATED

@@ -5,13 +5,13 @@
 #INPUT
 Tmin=-100.
 Tmax=100.
-THmin =-68.
+THmin =-68. #because we don't start at standard pressure -86 is ~70C moist adiabat
 THmax= 42.
 Pbot = 105
 Ptop = 1    #kPa - upper atmosphere limit surface
 Plim = 1
 degree =10      #degree of polinomial to model the curves
-datafile = '%s-%s.npy' %(Tmin,Tmax)
+datafile = '%s-%s_T.npy' %(Tmin,Tmax)
 #=======================================================
 #supress warnings
 import warnings
@@ -32,10 +32,14 @@ import os.path
 #thermodynamic constants
 Rd = 287.058    #[J K^-1 kg^-1] gas constant for dry air
 Rv = 461.5      #[J K^-1 kg^-1] gas constant for water vapour
-Cp = 1006.      #[J K^-1 kg^-1] specific heat of dry air at constant pressure
-T0 = 273.16     #standard temperature
+Cp = 1005.7     #[J K^-1 kg^-1] specific heat of dry air at constant pressure
+T0 = 273.15     #standard temperature
 P0 = 100.      #kPa
 e0 = 0.611657   #kPa: adjusted Clausius-Clayperon constant (Koutsoyiannis 2011)
+
+# #Bolton alternatives
+# Rd = 287.04    #[J K^-1 kg^-1] gas constant for dry air
+# e0 = 0.6112   #kPa
 
 #derived constants
 Eps = Rd/Rv     #dimensionless
@@ -63,7 +67,7 @@ else:
 
     def f_es(T):
         #saturation vapour pressure
-        return  e0*np.exp(24.921*(1.-(T0/T)))*((T0/T)**5.06)
+        return  e0*np.exp(24.921*(1.-(273.16/T)))*((273.16/T)**5.06)
     def f_rs(P,es):
         #saturated mixing ratio of water at temperature
         return  Eps*es / (P - es)
@@ -211,6 +215,28 @@ plt.savefig('./figs/emagram.pdf')
 plt.show()
 plt.close()
 
+#-----------------referee demo only-------------
+# #plot full range adiabats 
+# plt.figure(figsize=(9,6))
+# plt.title('MODELLED MOIST ADIABATS')
+# plt.plot(arrayTHfit[0:int(abs(THmin)*2):10,:].T-T0,PrangeFit, 'b')
+# plt.plot(arrayTHfit[int(abs(THmin)*2)::10,:].T-T0,PrangeFit, 'r')
+# ax = plt.gca()
+# ax.invert_yaxis()
+# plt.ylim([105,10])
+# plt.xlim([-200,40])
+# # plt.yscale('log')
+# ax.set_yticks(PrangeFit[PaxisIdx])
+# ax.set_yticklabels(PrangeFit[PaxisIdx].round())
+# plt.grid()
+# plt.xlabel("temperature [$^\circ$C]")
+# plt.ylabel("pressure [kPa]")
+# plt.legend(loc='upper right',fontsize=12)
+# plt.savefig('./figs/full_range_adiabats.pdf')
+# plt.show()
+# plt.close()
+#-----------------rend of referee demo-------------
+
 #plot fit of single adiabat THref
 # plt.title('$\\theta_{ref} = \\theta_{-70}$ POLYNOMIAL FIT')
 plt.plot(THref,PrangeFit,'g')
@@ -223,15 +249,30 @@ plt.savefig('./figs/THref_May.pdf')
 plt.show()
 plt.close()
 
+
+#-----------referee demo only for different reference curve---------
 # #plot transformed adiabats
-# plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{trans}$')
-# plt.plot(THref,arrayTHnorm[0:int(Tmax),:].T,'b')
-# plt.plot(THref,arrayTHnorm[int(Tmax):,:].T,'r')
-# plt.xlabel('$\\theta_{ref}$ [K]')
-# plt.ylabel('$\\theta_{trans}$')
-# # plt.savefig('./figs/THtrans.pdf')
+# plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{ref}=-70C$')
+# plt.plot(THref,arrayTHnorm[0:int(abs(THmin)*2):10,:].T,'b')
+# plt.plot(THref,arrayTHnorm[int(abs(THmin)*2)::10,:].T,'r')
+# plt.xlabel('temperature along $\\theta_{ref}$ [K]')
+# plt.ylabel('temperature along $\\theta_{w}$ [K]')
+# plt.gca().text(120,130,'$\\theta_{ref}=-70C$',  color='blue', rotation=20)
+# plt.savefig('./figs/THtrans_Oct_n70.pdf')
 # plt.show()
 # plt.close()
+
+# #plot transformed adiabats
+# plt.title('TRANSFORMED MOIST ADIABATS $\\theta_{ref}=+40C$')
+# plt.plot(THref,arrayTHnorm[0:int(abs(THmin)*2):10,:].T,'b')
+# plt.plot(THref,arrayTHnorm[int(abs(THmin)*2)::10,:].T,'r')
+# plt.xlabel('temperature along $\\theta_{ref}$ [K]')
+# plt.ylabel('temperature along $\\theta_{w}$ [K]')
+# plt.gca().text(200,227,'$\\theta_{ref}=+40C$',  color='red', rotation=27)
+# plt.savefig('./figs/THtrans_Oct_p40.pdf')
+# plt.show()
+# plt.close()
+#-----------end of demo---------
 
 #subplot of fits for individual parameters
 fig = plt.figure(figsize=(12, 10)) 

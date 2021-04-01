@@ -11,4 +11,8 @@ https://acp.copernicus.org/articles/17/15037/2017/
 https://met3d.readthedocs.io/en/latest/
 
 
-
+To regenerate coefficients for other constants/equations/etc.
+=======================================
+1. Edit/run tephi_may2017.py (run this first!)
+2. Edit/run THfcnTP.py
+The remaining files in this directory are largely personal work
